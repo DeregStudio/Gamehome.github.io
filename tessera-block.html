@@ -1,0 +1,3599 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1446">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="description" data-i18n-content="meta.desc" content="Tessera Block : puzzle de blocs. Posez les pièces, complétez lignes et colonnes, enchaînez les combos.">
+<link rel="preconnect" href="https://bicea.org">
+<link rel="dns-prefetch" href="//bicea.org">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%232d1b69'/%3E%3Crect x='9' y='9' width='22' height='22' rx='6' fill='%23ff5d73'/%3E%3Crect x='33' y='9' width='22' height='22' rx='6' fill='%23ffb629'/%3E%3Crect x='9' y='33' width='22' height='22' rx='6' fill='%237ed957'/%3E%3Crect x='33' y='33' width='22' height='22' rx='6' fill='%233da9fc'/%3E%3C/svg%3E">
+<title>Tessera Block — puzzle de blocs</title>
+<style>
+/* Tessera Block — identité « nuit violette + gemmes ». Aucune ressource externe (polices système, icônes SVG intégrées). */
+:root {
+  --bg1: #1a1446;
+  --bg2: #2d1b69;
+  --bg3: #12486b;
+  --gold: #ffd54a;
+  --u: 4px; /* 1 % de la plus petite dimension de l'écran, mis à jour par le script */
+  --hud-h: 100px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; color: #fff;
+  font-family: "Trebuchet MS", "Segoe UI", Roboto, system-ui, -apple-system, sans-serif;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none;
+  background: #1a1446;
+}
+body {
+  background:
+    radial-gradient(120% 70% at 12% 0%, rgba(255, 110, 199, 0.3), transparent 60%),
+    radial-gradient(90% 60% at 100% 100%, rgba(31, 209, 178, 0.24), transparent 60%),
+    linear-gradient(165deg, var(--bg1), var(--bg2) 50%, var(--bg3));
+  background-attachment: fixed;
+}
+#app { position: fixed; inset: 0; overflow: hidden; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#safeProbe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+svg { display: block; }
+.ic { width: 1em; height: 1em; }
+#app[data-phase="home"] #cv, #app[data-phase="home"] #hud, #app[data-phase="home"] #fxLayer { visibility: hidden; }
+
+/* ---------- Barre d'état de jeu ---------- */
+.hud { position: absolute; z-index: 5; pointer-events: none; display: flex; flex-direction: column;
+  padding: calc(var(--u) * 2.2) calc(var(--u) * 3.4) 0; }
+.hud-top { display: flex; justify-content: space-between; align-items: center; }
+.best { display: flex; align-items: center; gap: calc(var(--u) * 1.3); color: var(--gold); font-weight: 800;
+  font-size: calc(var(--u) * 5.2); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); }
+.best .ic { width: calc(var(--u) * 6.2); height: calc(var(--u) * 6.2); filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3)); }
+.hud-btns { display: flex; gap: calc(var(--u) * 2); }
+.icon-btn { pointer-events: auto; border: 0; border-radius: 50%; color: #fff; cursor: pointer; display: grid; place-items: center;
+  width: max(44px, calc(var(--u) * 11)); height: max(44px, calc(var(--u) * 11)); background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 3px 8px rgba(0, 0, 0, 0.25); transition: transform 0.12s, background 0.12s; }
+.icon-btn:active { transform: scale(0.9); background: rgba(255, 255, 255, 0.26); }
+.icon-btn .ic, .icon-btn svg { width: 54%; height: 54%; }
+.icon-btn.small { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+.score-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 1); }
+.score { font-weight: 900; line-height: 1; letter-spacing: 0.01em; font-variant-numeric: tabular-nums;
+  font-size: min(calc(var(--u) * 13), calc(var(--hud-h) * 0.46)); text-shadow: 0 3px 0 rgba(0, 0, 0, 0.28), 0 0 24px rgba(255, 255, 255, 0.18); }
+.score.bump { animation: bump 0.34s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.16); } 100% { transform: scale(1); } }
+.combo-pill { opacity: 0; transform: scale(0.8); transition: opacity 0.2s, transform 0.2s; font-weight: 900; padding: 0.15em 0.85em;
+  font-size: calc(var(--u) * 3.6); border-radius: 99px; background: linear-gradient(90deg, #ffb629, #ff6ec7); color: #2a0f44;
+  box-shadow: 0 0 18px rgba(255, 182, 41, 0.55); }
+.combo-pill.on { opacity: 1; transform: none; }
+.land .hud { padding: calc(var(--u) * 3); justify-content: center; align-items: center; gap: calc(var(--u) * 5); }
+.land .hud-top { display: contents; }
+.land .best { order: 1; }
+.land .score-wrap { order: 2; flex: none; }
+.land .hud-btns { order: 3; }
+.land .score { font-size: calc(var(--u) * 11); }
+
+/* ---------- Effets flottants ---------- */
+.fx-layer { position: absolute; inset: 0; pointer-events: none; z-index: 8; overflow: hidden; }
+.fx-float { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font-weight: 900; font-size: calc(var(--u) * 6.4);
+  color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), 0 0 14px rgba(255, 213, 74, 0.9); animation: floatUp 0.95s ease-out forwards; }
+.fx-float.big { font-size: calc(var(--u) * 8.6); color: #ffe27a; }
+@keyframes floatUp {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.6); }
+  15% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
+}
+.fx-banner { position: absolute; left: 50%; top: var(--banner-y, 40%); display: flex; flex-direction: column; align-items: center;
+  font-weight: 900; text-align: center; white-space: nowrap; transform: translate(-50%, -50%); animation: banner 1.1s cubic-bezier(0.2, 1.3, 0.4, 1) forwards; }
+.fx-banner b { font-size: calc(var(--u) * 11); color: #ffe27a; letter-spacing: 0.02em; text-shadow: 0 4px 0 #b3561a, 0 0 28px rgba(255, 150, 40, 0.85); }
+.fx-banner i { font-style: normal; font-size: calc(var(--u) * 6.6); color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.4), 0 0 16px rgba(255, 110, 199, 0.9); }
+.fx-banner.perfect b { color: #9ff7e6; text-shadow: 0 4px 0 #0d6b5a, 0 0 28px rgba(31, 209, 178, 0.9); }
+@keyframes banner {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  22% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+  35% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -64%) scale(1.05); }
+}
+.toast { position: absolute; z-index: 60; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px); max-width: 88vw; text-align: center;
+  transform: translate(-50%, 20px); padding: 0.7em 1.2em; border-radius: 99px; background: rgba(10, 6, 36, 0.92); color: #fff;
+  font-weight: 700; font-size: 15px; opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Écrans et fenêtres ---------- */
+.screen { position: absolute; inset: 0; z-index: 20; touch-action: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(14, 9, 44, 0.58); opacity: 0; visibility: hidden; transition: opacity 0.28s ease, visibility 0s linear 0.28s; }
+.screen.show { opacity: 1; visibility: visible; transition: opacity 0.28s ease; }
+.screen.home { background: transparent; }
+.modal { z-index: 30; background: rgba(8, 5, 30, 0.66); }
+.card { width: min(88vw, 380px); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 22px 20px;
+  border-radius: 26px; border: 1px solid rgba(255, 255, 255, 0.14); transform: translateY(14px) scale(0.96);
+  background: linear-gradient(180deg, rgba(56, 38, 126, 0.98), rgba(30, 20, 84, 0.98));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18); transition: transform 0.32s cubic-bezier(0.2, 1.2, 0.3, 1); }
+.screen.show .card { transform: none; }
+.card h2 { margin: 0; text-align: center; font-size: 26px; font-weight: 900; }
+.card-head { display: flex; align-items: center; justify-content: space-between; }
+.card-head h2 { text-align: left; }
+.stat { display: flex; flex-direction: column; align-items: center; }
+.stat small { opacity: 0.75; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 13px; }
+.stat b { font-size: 44px; font-weight: 900; line-height: 1.1; }
+.stat.best { flex-direction: row; justify-content: center; gap: 12px; color: var(--gold); text-shadow: none; font-size: inherit; }
+.stat.best .ic { width: 34px; height: 34px; }
+.stat.best div { display: flex; flex-direction: column; align-items: flex-start; }
+.stat.best b { font-size: 30px; }
+.big-score { font-size: 64px !important; color: var(--gold); text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3); }
+.badge { align-self: center; padding: 0.3em 1em; border-radius: 99px; font-weight: 900; color: #2a0f44; animation: pulse 1s ease-in-out infinite;
+  background: linear-gradient(90deg, #ffb629, #ff6ec7); }
+@keyframes pulse { 50% { transform: scale(1.08); } }
+.info { margin: 0; text-align: center; opacity: 0.8; font-size: 14px; }
+.foot { margin: 4px 0 0; text-align: center; opacity: 0.6; font-size: 12px; }
+.note { opacity: 0.7; font-size: 12.5px; }
+
+.btn { display: flex; align-items: center; justify-content: center; gap: 0.6em; border: 0; border-radius: 18px; min-height: 52px; padding: 0.8em 1.2em;
+  font: inherit; font-weight: 800; font-size: 17px; color: #fff; cursor: pointer; transition: transform 0.12s, filter 0.12s; }
+.btn svg { width: 1.25em; height: 1.25em; flex: none; }
+.btn:active { transform: translateY(2px) scale(0.98); }
+.btn.primary { color: #0d2a24; background: linear-gradient(180deg, #8cf0a0, #2fd6a0);
+  box-shadow: 0 5px 0 #138a6a, 0 10px 22px rgba(31, 209, 178, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6); }
+.btn.ghost { background: rgba(255, 255, 255, 0.12); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.btn.big { font-size: 22px; min-height: 64px; padding: 0.7em 1.6em; }
+/* ---------- Emplacements publicitaires (accueil, pause, niveau réussi, partie terminée) : affichés en entier, jamais rognés ---------- */
+.ad-slot { width: 100%; min-height: 250px; display: block; text-align: center; margin: 4px 0 6px; }
+.ad-slot.ad-empty { display: none; }
+.ad-slot > div { display: block; width: 100%; max-width: 100%; }
+/* Le code publicitaire est écrit pour les pages classiques : on lui rend les règles par défaut du navigateur (le reste du jeu utilise border-box). */
+.ad-slot > div, .ad-slot > div * { box-sizing: content-box; }
+.ad-slot img { max-width: 100%; }
+#screenOver .card, #screenPause .card, #screenLevel .card, #modalReward .card { gap: 8px; padding: 16px 18px; touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+#screenOver .card h2, #screenPause .card h2 { font-size: 24px; }
+#screenOver .big-score { font-size: 48px !important; }
+#screenOver .stat.best b { font-size: 24px; }
+#screenOver .stat.best .ic { width: 28px; height: 28px; }
+#screenOver .btn.big { font-size: 20px; min-height: 56px; }
+#screenOver .actions .btn, #screenPause .actions .btn { min-height: 46px; font-size: 15px; }
+#modalReward .card h2 { font-size: 24px; }
+#modalReward .info { margin: 0; text-align: center; }
+.reward-bar { height: 10px; border-radius: 99px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.reward-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #8cf0a0, #2fd6a0); transition: width 0.25s linear; }
+.reward-status { margin: 0; text-align: center; font-weight: 800; font-size: 15px; min-height: 1.4em; }
+/* Bouton « +40 » : visible mais jamais plus important que le bouton principal vert */
+.btn.bonus { min-height: 46px; font-size: 16px; color: #3a2300; background: linear-gradient(180deg, #ffe27a, #ffb12e);
+  box-shadow: 0 4px 0 #b8741a, inset 0 1px 0 rgba(255, 255, 255, 0.55); }
+.btn.bonus .bonus-pts { font-weight: 900; padding: 0.05em 0.6em; border-radius: 99px; background: rgba(58, 35, 0, 0.14); }
+#screenPause .stat b { font-size: 36px; }
+/* Accueil : le logo ne passe jamais sous les boutons Langue / Réglages ; le bloc central reste centré dans l'espace libre au-dessus de la pub. */
+#screenHome { overflow-y: auto; justify-content: flex-start; touch-action: pan-y; overscroll-behavior: contain;
+  padding-top: calc(max(14px, env(safe-area-inset-top)) + 58px); }
+#screenHome .home-inner { flex: none; margin: auto 0; gap: 12px; }
+#screenHome > .ad-slot { flex: none; width: min(86vw, 360px); margin: 8px 0 4px; }
+@media (max-height: 760px) { #screenHome .home-inner { gap: 8px; } }
+@media (max-height: 720px) { #screenOver #overStats { display: none; } }
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenOver .card, #screenPause .card, #screenLevel .card, #modalReward .card { width: min(94vw, 720px); display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; align-content: center; }
+  #screenHome { flex-direction: row; justify-content: center; align-items: safe center; gap: 18px; }
+  #screenHome .home-inner { width: min(46vw, 360px); margin: 0; }
+  #screenHome > .ad-slot { width: min(46vw, 340px); margin: 0; }
+  #screenOver .card > *, #screenPause .card > *, #screenLevel .card > *, #modalReward .card > * { grid-column: 1; }
+  #screenOver .card > .ad-slot, #screenPause .card > .ad-slot, #screenLevel .card > .ad-slot, #modalReward .card > .ad-slot { grid-column: 2; grid-row: 1 / span 6; margin: 0; }
+  #screenOver .card > .ad-slot.ad-empty, #screenPause .card > .ad-slot.ad-empty, #screenLevel .card > .ad-slot.ad-empty, #modalReward .card > .ad-slot.ad-empty { display: none; }
+}
+.actions { display: flex; gap: 10px; }
+.actions .btn { flex: 1; }
+
+.row { display: flex; align-items: center; gap: 12px; padding: 4px 2px; font-weight: 700; font-size: 17px; }
+.row svg { width: 24px; height: 24px; opacity: 0.9; flex: none; }
+.row span { flex: 1; }
+.row.col { flex-direction: column; align-items: stretch; gap: 8px; }
+.row-title { display: flex; align-items: center; gap: 12px; }
+.switch { position: relative; flex: none; width: 56px; height: 32px; border: 0; border-radius: 99px; cursor: pointer; background: rgba(255, 255, 255, 0.2); transition: background 0.2s; }
+.switch i { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); transition: transform 0.2s; }
+.switch[aria-checked="true"] { background: linear-gradient(90deg, #4be3a8, #1fd1b2); }
+.switch[aria-checked="true"] i { transform: translateX(24px); }
+.seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.1); }
+.seg button { flex: 1; border: 0; border-radius: 11px; padding: 0.6em; font: inherit; font-weight: 800; color: #fff; background: transparent; cursor: pointer; }
+.seg button[aria-pressed="true"] { color: #3a2300; background: linear-gradient(180deg, #ffd54a, #ffb629); }
+.confirm p { margin: 0; text-align: center; font-weight: 700; font-size: 18px; line-height: 1.35; }
+
+/* ---------- Accueil ---------- */
+.home-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 18px; width: min(86vw, 360px); }
+.logo { display: flex; flex-direction: column; align-items: center; gap: 0.12em; margin: 0; font-size: clamp(26px, calc(var(--u) * 9), 56px); }
+.logo-row { display: flex; gap: calc(var(--u) * 1.3); }
+.logo-word { font-size: 0.5em; font-weight: 900; letter-spacing: 0.62em; padding-left: 0.62em; color: var(--gold); line-height: 1;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3), 0 0 18px rgba(255, 200, 60, 0.35); animation: fadeUp 0.6s 0.55s both ease-out; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.logo-row span { display: grid; place-items: center; width: 1.15em; height: 1.2em; border-radius: 0.28em; font-weight: 900; color: #fff;
+  background: var(--c);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 65%, #fff), var(--c) 52%, color-mix(in srgb, var(--c) 72%, #000));
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 0 rgba(0, 0, 0, 0.18), 0 6px 14px rgba(0, 0, 0, 0.35);
+  animation: dropIn 0.6s both cubic-bezier(0.2, 1.4, 0.4, 1); animation-delay: calc(var(--i) * 70ms); }
+@keyframes dropIn { from { opacity: 0; transform: translateY(-34px) scale(0.6) rotate(-8deg); } to { opacity: 1; transform: none; } }
+.tag { margin: -6px 0 6px; font-weight: 700; opacity: 0.8; letter-spacing: 0.12em; text-transform: uppercase; font-size: 14px; }
+.home-best { display: flex; align-items: center; gap: 12px; color: var(--gold); }
+.home-best .ic { width: 38px; height: 38px; }
+.home-best div { display: flex; flex-direction: column; }
+.home-best small { font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; text-transform: uppercase; font-size: 12px; }
+.home-best b { font-size: 34px; font-weight: 900; line-height: 1; }
+.home-inner .btn { width: 100%; }
+.corner { position: absolute; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); }
+.corner-left { position: absolute; z-index: 2; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); }
+.lang-seg { width: auto; padding: 3px; border-radius: 22px; }
+.lang-seg button { flex: none; padding: 0 14px; min-height: 38px; border-radius: 19px; font-size: 14px; }
+.deco { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.deco i { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 24%; background: var(--c); opacity: 0.2;
+  animation: floaty 7s ease-in-out infinite; animation-delay: var(--d); }
+.screen:not(.show) .deco i { animation-play-state: paused; }
+@keyframes floaty { 50% { transform: translateY(-18px) rotate(14deg); } }
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .home-inner { gap: 10px; }
+  .home-best { display: none; }
+  .card { padding: 14px 16px; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* Éléments déplacés hors des balises (validation HTML : pas de style en ligne) */
+.deco i:nth-child(1) { --x:8%;--y:14%;--s:34px;--c:#ff5d73;--d:0s; }
+.deco i:nth-child(2) { --x:82%;--y:10%;--s:26px;--c:#ffb629;--d:-1.4s; }
+.deco i:nth-child(3) { --x:70%;--y:30%;--s:40px;--c:#9b6bff;--d:-2.8s; }
+.deco i:nth-child(4) { --x:14%;--y:44%;--s:24px;--c:#3da9fc;--d:-4.2s; }
+.deco i:nth-child(5) { --x:88%;--y:56%;--s:32px;--c:#7ed957;--d:-5.6s; }
+.deco i:nth-child(6) { --x:20%;--y:76%;--s:38px;--c:#ff6ec7;--d:-1s; }
+.deco i:nth-child(7) { --x:64%;--y:82%;--s:28px;--c:#1fd1b2;--d:-3.4s; }
+.deco i:nth-child(8) { --x:44%;--y:6%;--s:20px;--c:#ffb629;--d:-2s; }
+.logo .t0 { --c:#ff5d73;--i:0; }
+.logo .t1 { --c:#ffb629;--i:1; }
+.logo .t2 { --c:#7ed957;--i:2; }
+.logo .t3 { --c:#1fd1b2;--i:3; }
+.logo .t4 { --c:#3da9fc;--i:4; }
+.logo .t5 { --c:#9b6bff;--i:5; }
+.logo .t6 { --c:#ff6ec7;--i:6; }
+.svg-defs { position: absolute; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.reason { max-width: 30ch; line-height: 1.35; opacity: 0.9; }
+
+/* ---------- Mode Aventure : barre de niveau, choix du mode, carte de niveau ---------- */
+.level-box { flex: none; display: flex; flex-direction: column; gap: calc(var(--u) * 0.9); padding: 0 calc(var(--u) * 1.5) calc(var(--u) * 1.1); }
+.level-line { display: flex; justify-content: space-between; align-items: baseline; font-size: calc(var(--u) * 3.3); font-weight: 800; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); }
+.level-line b { letter-spacing: 0.08em; color: var(--gold); }
+.level-line span { font-variant-numeric: tabular-nums; opacity: 0.92; }
+.level-bar { height: calc(var(--u) * 2.2); border-radius: 99px; overflow: hidden; background: rgba(0, 0, 0, 0.3); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45); }
+.level-bar i { display: block; width: 100%; height: 100%; border-radius: inherit; transform-origin: left center; transform: scaleX(var(--p, 0));
+  background: linear-gradient(90deg, #7ed957, #1fd1b2); transition: transform 0.35s ease-out; }
+.level-goal { text-align: center; font-size: calc(var(--u) * 3.1); font-weight: 800; color: #ffd54a; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); }
+.land .level-box { order: 3; width: 100%; padding: 0; }
+.land .hud-btns { order: 4; }
+.mode-seg { width: 100%; }
+.badge.kind { background: linear-gradient(90deg, #ff6ec7, #9b6bff); color: #fff; animation: none; }
+.level-card #levelTitle { font-size: 38px; }
+.big-text { font-size: 17px; line-height: 1.4; max-width: 28ch; align-self: center; opacity: 1; }
+
+
+</style>
+</head>
+<body>
+<div id="app" data-phase="home">
+  <canvas id="cv" role="img" data-i18n-aria="aria.board" aria-label="Plateau de jeu"></canvas>
+  <div id="safeProbe" aria-hidden="true"></div>
+
+  <header id="hud" class="hud">
+    <div class="hud-top">
+      <div class="best" data-i18n-title="bestScore" title="Meilleur score"><svg class="ic" aria-hidden="true"><use href="#i-crown"/></svg><span id="bestVal">0</span></div>
+      <div class="hud-btns">
+        <button id="btnPause" class="icon-btn" type="button" data-i18n-aria="pause" aria-label="Pause"><svg class="ic" aria-hidden="true"><use href="#i-pause"/></svg></button>
+        <button id="btnSettings" class="icon-btn" type="button" data-i18n-aria="settings" aria-label="Réglages"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></button>
+      </div>
+    </div>
+    <div class="score-wrap">
+      <div id="scoreVal" class="score" aria-live="off">0</div>
+      <div id="comboPill" class="combo-pill">COMBO ×2</div>
+    </div>
+    <div id="levelBox" class="level-box" hidden>
+      <div class="level-line"><b id="levelNum">NIVEAU 1</b><span id="levelPts">0 / 1000</span></div>
+      <div id="levelBar" class="level-bar" aria-hidden="true"><i></i></div>
+      <div id="levelGoal" class="level-goal" hidden></div>
+    </div>
+  </header>
+
+  <div id="fxLayer" class="fx-layer" aria-hidden="true"></div>
+
+  <section id="screenHome" class="screen home" data-i18n-aria="home" aria-label="Accueil">
+    <div class="deco" aria-hidden="true">
+      <i></i>
+      <i></i>
+      <i></i>
+      <i></i>
+      <i></i>
+      <i></i>
+      <i></i>
+      <i></i>
+    </div>
+    <div class="home-inner">
+      <h1 class="logo"><span class="sr-only">Tessera Block</span><span class="logo-row" aria-hidden="true"><span class="t0">T</span><span class="t1">E</span><span class="t2">S</span><span class="t3">S</span><span class="t4">E</span><span class="t5">R</span><span class="t6">A</span></span><span class="logo-word" aria-hidden="true">BLOCK</span></h1>
+      <p class="tag" data-i18n="tagline">Le puzzle de blocs</p>
+      <div id="segMode" class="seg mode-seg" role="group" data-i18n-aria="mode.label" aria-label="Mode de jeu">
+        <button type="button" data-mode="classic" data-i18n="mode.classic" aria-pressed="true">Classique</button>
+        <button type="button" data-mode="adventure" data-i18n="mode.adventure" aria-pressed="false">Aventure</button>
+      </div>
+      <div class="home-best"><svg class="ic" aria-hidden="true"><use href="#i-crown"/></svg><div><small data-i18n="bestScore">Meilleur score</small><b id="homeBest">0</b></div></div>
+      <p id="homeLevel" class="info" hidden></p>
+      <button id="btnPlay" class="btn primary big" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg><span>JOUER</span></button>
+      <button id="btnNew" class="btn ghost" type="button" hidden>Nouvelle partie</button>
+      <p id="homeInfo" class="info" hidden></p>
+    </div>
+    <div class="ad-slot" data-ad-slot="home" aria-label="Publicité"></div>
+    <div id="segLang" class="seg lang-seg corner-left" role="group" data-i18n-aria="lang.label" aria-label="Langue">
+      <button type="button" data-lang="fr" lang="fr" aria-pressed="true">Français</button>
+      <button type="button" data-lang="en" lang="en" aria-pressed="false">English</button>
+    </div>
+    <button id="btnHomeSettings" class="icon-btn corner" type="button" data-i18n-aria="settings" aria-label="Réglages"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></button>
+  </section>
+
+  <section id="screenPause" class="screen" role="dialog" aria-modal="true" data-i18n-aria="pause" aria-label="Pause">
+    <div class="card">
+      <h2 data-i18n="pause">Pause</h2>
+      <p id="pauseLevel" class="info" hidden></p>
+      <div class="stat"><small data-i18n="score">Score</small><b id="pauseScore">0</b></div>
+      <button id="btnResume" class="btn primary" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg><span data-i18n="resume">Reprendre</span></button>
+      <div class="actions">
+        <button id="btnPauseRestart" class="btn ghost" type="button"><svg aria-hidden="true"><use href="#i-replay"/></svg><span id="restartLabel">Recommencer</span></button>
+        <button id="btnPauseHome" class="btn ghost" type="button"><svg aria-hidden="true"><use href="#i-home"/></svg><span data-i18n="home">Accueil</span></button>
+      </div>
+      <div class="ad-slot" data-ad-slot="pause" aria-label="Publicité"></div>
+    </div>
+  </section>
+
+  <section id="screenOver" class="screen" role="dialog" aria-modal="true" data-i18n-aria="gameOver" aria-label="Partie terminée">
+    <div class="card">
+      <h2 data-i18n="gameOver">Partie terminée</h2>
+      <p id="overReason" class="info reason"></p>
+      <div class="stat"><small data-i18n="score">Score</small><b id="overScore" class="big-score">0</b></div>
+      <div id="overRecord" class="badge" data-i18n="newRecord" hidden>Nouveau record !</div>
+      <div class="stat best"><svg class="ic" aria-hidden="true"><use href="#i-crown"/></svg><div><small data-i18n="bestScore">Meilleur score</small><b id="overBest">0</b></div></div>
+      <p id="overStats" class="info"></p>
+      <div class="ad-slot" data-ad-slot="over" aria-label="Publicité"></div>
+      <button id="btnAgain" class="btn primary big" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg><span id="againLabel">REJOUER</span></button>
+      <button id="btnBonusOver" class="btn bonus" type="button" hidden><span class="bonus-pts">+40</span><svg aria-hidden="true"><use href="#i-play"/></svg><span data-i18n="bonus.btn">Regarder une pub</span></button>
+      <div class="actions">
+        <button id="btnOverNew" class="btn ghost" type="button" hidden><svg aria-hidden="true"><use href="#i-replay"/></svg><span data-i18n="newAdventure">Nouvelle aventure</span></button>
+        <button id="btnOverHome" class="btn ghost" type="button"><svg aria-hidden="true"><use href="#i-home"/></svg><span data-i18n="home">Accueil</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screenLevel" class="screen" role="dialog" aria-modal="true" aria-labelledby="levelTitle">
+    <div class="card level-card">
+      <p id="levelDone" class="badge" data-i18n="levelDone" hidden>Niveau réussi !</p>
+      <h2 id="levelTitle">Niveau 1</h2>
+      <p id="levelKind" class="badge kind" hidden></p>
+      <p id="levelText" class="info reason big-text"></p>
+      <button id="btnLevelGo" class="btn primary big" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg><span data-i18n="letsGo">C'EST PARTI</span></button>
+      <button id="btnBonusLevel" class="btn bonus" type="button" hidden><span class="bonus-pts">+40</span><svg aria-hidden="true"><use href="#i-play"/></svg><span data-i18n="bonus.btn">Regarder une pub</span></button>
+      <div class="ad-slot" data-ad-slot="level" aria-label="Publicité"></div>
+    </div>
+  </section>
+
+  <section id="modalReward" class="screen modal" role="dialog" aria-modal="true" aria-labelledby="rewardTitle">
+    <div class="card">
+      <h2 id="rewardTitle" data-i18n="bonus.title">Gagne 40 points</h2>
+      <p id="rewardText" class="info" data-i18n="bonus.text">Regarde la pub jusqu'au bout : les 40 points s'ajoutent à ton score.</p>
+      <div class="reward-bar"><i id="rewardBar"></i></div>
+      <p id="rewardStatus" class="reward-status" role="status" aria-live="polite">Chargement de la pub…</p>
+      <div class="ad-slot" data-ad-slot="reward" aria-label="Publicité"></div>
+      <button id="btnRewardClose" class="btn ghost" type="button" data-i18n="bonus.close">Fermer</button>
+    </div>
+  </section>
+
+  <section id="modalSettings" class="screen modal" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="card">
+      <div class="card-head">
+        <h2 id="setTitle" data-i18n="settings">Réglages</h2>
+        <button id="btnSettingsClose" class="icon-btn small" type="button" data-i18n-aria="close" aria-label="Fermer"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
+      <div class="row"><svg aria-hidden="true"><use href="#i-sound"/></svg><span data-i18n="sound">Son</span><button id="swSound" class="switch" type="button" role="switch" aria-checked="true" data-i18n-aria="sound" aria-label="Son"><i></i></button></div>
+      <div class="row"><svg aria-hidden="true"><use href="#i-music"/></svg><span data-i18n="music">Musique</span><button id="swMusic" class="switch" type="button" role="switch" aria-checked="false" data-i18n-aria="music" aria-label="Musique"><i></i></button></div>
+      <div class="row"><svg aria-hidden="true"><use href="#i-vibrate"/></svg><span data-i18n="vibration">Vibrations</span><button id="swVibration" class="switch" type="button" role="switch" aria-checked="true" data-i18n-aria="vibration" aria-label="Vibrations"><i></i></button></div>
+      <div class="row col">
+        <div class="row-title"><svg aria-hidden="true"><use href="#i-grid"/></svg><span data-i18n="grid">Grille</span></div>
+        <div id="segGrid" class="seg" role="group" data-i18n-aria="gridSize" aria-label="Taille de la grille">
+          <button type="button" data-size="8" aria-pressed="false">8 × 8</button>
+          <button type="button" data-size="10" aria-pressed="true">10 × 10</button>
+        </div>
+        <small id="gridNote" class="note"></small>
+      </div>
+      <div id="rowActions" class="actions">
+        <button id="btnSetHome" class="btn ghost" type="button"><svg aria-hidden="true"><use href="#i-home"/></svg><span data-i18n="home">Accueil</span></button>
+        <button id="btnSetReplay" class="btn ghost" type="button"><svg aria-hidden="true"><use href="#i-replay"/></svg><span data-i18n="replay">Rejouer</span></button>
+      </div>
+      <p id="setFooter" class="foot"></p>
+    </div>
+  </section>
+
+  <section id="modalConfirm" class="screen modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmText">
+    <div class="card confirm">
+      <p id="confirmText"></p>
+      <div class="actions">
+        <button id="btnConfirmNo" class="btn ghost" type="button" data-i18n="cancel">Annuler</button>
+        <button id="btnConfirmYes" class="btn primary" type="button" data-i18n="confirm">Confirmer</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<svg width="0" height="0" class="svg-defs" aria-hidden="true" focusable="false">
+  <symbol id="i-crown" viewBox="0 0 24 24"><path fill="currentColor" d="M2.6 7.6l5 4.1L12 4.2l4.4 7.5 5-4.1-1.8 10.3H4.4z"/><rect fill="currentColor" x="4.6" y="19.7" width="14.8" height="2.2" rx="1.1"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" x="6" y="4.5" width="4.2" height="15" rx="1.4"/><rect fill="currentColor" x="13.8" y="4.5" width="4.2" height="15" rx="1.4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 4.9v14.2a1 1 0 0 0 1.5.9l11-7.1a1 1 0 0 0 0-1.8l-11-7.1A1 1 0 0 0 8 4.9z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-dasharray="3.38 3.38"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="currentColor" stroke-width="4"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3L2.4 11.3h2.7v9.2a.9.9 0 0 0 .9.9h3.8v-6h4.4v6H18a.9.9 0 0 0 .9-.9v-9.2h2.7z"/></symbol>
+  <symbol id="i-replay" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" d="M19.2 12a7.2 7.2 0 1 1-2.2-5.2"/><path fill="currentColor" d="M20.6 3.6v6a.8.8 0 0 1-.8.8h-6z"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path fill="currentColor" d="M3.5 9.3v5.4h3.9l4.8 4V5.3l-4.8 4z"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M15.6 8.8a4.6 4.6 0 0 1 0 6.4M18.4 6a8.6 8.6 0 0 1 0 12"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path fill="currentColor" d="M9.4 4.2l10-2v12.6a3 3 0 1 1-2.2-2.9V6.3l-5.6 1.1V17a3 3 0 1 1-2.2-2.9z"/></symbol>
+  <symbol id="i-vibrate" viewBox="0 0 24 24"><rect x="8" y="3.5" width="8" height="17" rx="2.2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4 8.5v7M20 8.5v7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect fill="currentColor" x="3.5" y="3.5" width="7.5" height="7.5" rx="2"/><rect fill="currentColor" x="13" y="3.5" width="7.5" height="7.5" rx="2"/><rect fill="currentColor" x="3.5" y="13" width="7.5" height="7.5" rx="2"/><rect fill="currentColor" x="13" y="13" width="7.5" height="7.5" rx="2"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
+</svg>
+
+<script>
+/* ===== config.js ===== */
+/* Tessera Block — configuration, bus d'événements et registres d'extension.
+ * Aucune dépendance. Chargé en premier. */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+
+  /* Tout ce qui est « réglable » vit ici (nom, identifiant de package, règles de score). */
+  PB.CONFIG = Object.freeze({
+    name: 'Tessera Block',
+    packageId: 'com.example.tesserablock', // à remplacer avant la publication Android
+    version: '0.2.3',
+    storagePrefix: 'tessera.v1.',
+    defaultGridSize: 10,
+    gridSizes: Object.freeze([8, 10]),
+    traySize: 3,
+    score: Object.freeze({
+      perCell: 1, // points par case posée
+      linePoints: 10, // base : 10 × n × n pour n lignes effacées d'un coup
+      comboCap: 8, // multiplicateur de combo maximal
+      comboGrace: 2, // coups sans ligne tolérés avant la retombée du combo
+      perfectClear: 300 // bonus grille entièrement vidée
+    }),
+    generator: Object.freeze({ attempts: 24, searchBudget: 800 }),
+    historyMax: 10
+  });
+
+  /* Bus d'événements : missions, récompenses et classements s'y abonneront plus tard.
+   * Événements émis par le jeu : 'game:start', 'game:move', 'game:over'. */
+  const listeners = Object.create(null);
+  PB.events = {
+    on(name, fn) {
+      (listeners[name] = listeners[name] || []).push(fn);
+      return () => PB.events.off(name, fn);
+    },
+    off(name, fn) {
+      const list = listeners[name];
+      if (list) listeners[name] = list.filter((f) => f !== fn);
+    },
+    emit(name, payload) {
+      for (const fn of (listeners[name] || []).slice()) {
+        try {
+          fn(payload);
+        } catch (err) {
+          if (typeof console !== 'undefined') console.error('[events]', name, err);
+        }
+      }
+    }
+  };
+
+  /* Registres d'extension (phase 8). Modes actifs : classique et aventure. */
+  PB.modes = {
+    classic: { id: 'classic', label: 'Classique', enabled: true },
+    adventure: { id: 'adventure', label: 'Aventure', enabled: true } // niveaux : voir levels.js
+  };
+  PB.themes = { gemmes: { id: 'gemmes', label: 'Gemmes', unlocked: true } };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = PB.CONFIG;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== i18n.js ===== */
+/* Tessera Block — langues : français (par défaut) et anglais.
+ * Module pur : aucun accès au navigateur, sauf applyDom(doc) qui reçoit le document en argument.
+ * Chaque texte du jeu passe par t(clé, paramètres). Une entrée est soit une phrase avec des {paramètres},
+ * soit une fonction (p) => phrase quand il faut accorder au pluriel. */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+
+  const LANGS = ['fr', 'en'];
+  const DEFAULT_LANG = 'fr';
+  const NAMES = { fr: 'Français', en: 'English' }; // chaque langue porte son propre nom, jamais traduit
+
+  const plural = (one, many, zeroIsOne) => (p) => p.n + ' ' + ((zeroIsOne ? p.n <= 1 : p.n === 1) ? one : many);
+
+  const DICT = {
+    fr: {
+      'meta.title': 'Tessera Block — puzzle de blocs',
+      'meta.desc': 'Tessera Block : puzzle de blocs. Posez les pièces, complétez lignes et colonnes, enchaînez les combos.',
+      'startError': 'Tessera Block n\'a pas pu démarrer.',
+      'lang.label': 'Langue',
+      'aria.board': 'Plateau de jeu',
+      'tagline': 'Le puzzle de blocs',
+      'mode.label': 'Mode de jeu',
+      'mode.classic': 'Classique',
+      'mode.adventure': 'Aventure',
+      'bestScore': 'Meilleur score',
+      'bestLevel': 'Meilleur niveau : {n}',
+      'score': 'Score',
+      'home': 'Accueil',
+      'play': 'JOUER',
+      'continue': 'CONTINUER',
+      'newGame': 'Nouvelle partie',
+      'newAdventure': 'Nouvelle aventure',
+      'pause': 'Pause',
+      'resume': 'Reprendre',
+      'restart': 'Recommencer',
+      'restartLevel': 'Recommencer le niveau',
+      'replay': 'Rejouer',
+      'again': 'REJOUER',
+      'againLevel': 'REJOUER LE NIVEAU {n}',
+      'gameOver': 'Partie terminée',
+      'newRecord': 'Nouveau record !',
+      'bonus.btn': 'Regarder une pub',
+      'bonus.title': 'Gagne 40 points',
+      'bonus.text': 'Regarde la pub jusqu\'au bout : les 40 points s\'ajoutent à ton score.',
+      'bonus.loading': 'Chargement de la pub…',
+      'bonus.wait': 'Récompense dans {n} s',
+      'bonus.done': '+{n} points ajoutés à ton score !',
+      'bonus.fail': 'Aucune pub disponible pour le moment. Réessaie plus tard.',
+      'bonus.close': 'Fermer',
+      'bonus.ok': 'Continuer',
+      'settings': 'Réglages',
+      'close': 'Fermer',
+      'sound': 'Son',
+      'music': 'Musique',
+      'vibration': 'Vibrations',
+      'grid': 'Grille',
+      'gridSize': 'Taille de la grille',
+      'gridNote.game': 'S\'applique à la prochaine partie classique.',
+      'gridNote.home': 'Taille de la grille du mode Classique (l\'Aventure se joue en 10 × 10).',
+      'footer': 'Version {v} · {storage}',
+      'storage.on': 'sauvegarde locale active',
+      'storage.off': 'sauvegarde indisponible (session seulement)',
+      'cancel': 'Annuler',
+      'confirm': 'Confirmer',
+      'combo': 'COMBO ×{n}',
+      'praise.2': 'Super !',
+      'praise.3': 'Génial !',
+      'praise.4': 'Fantastique !',
+      'praise.5': 'Incroyable !',
+      'perfect': 'GRILLE VIDÉE !',
+      'levelBanner': 'NIVEAU {n} RÉUSSI !',
+      'hud.level': 'NIVEAU {n}',
+      'levelTitle': 'Niveau {n}',
+      'levelDone': 'Niveau réussi !',
+      'challenge': 'DÉFI · {title}',
+      'letsGo': 'C\'EST PARTI',
+      'info.adventure': 'Niveau {n} · {score} / {target} pts',
+      'info.classic': 'Partie en cours · {score} pts · grille {size}×{size}',
+      'info.pause': 'Niveau {n} · {points} pts',
+      'over.full': 'La grille est pleine.',
+      'over.stuck': 'Plus aucune pièce ne peut être posée. {rest}',
+      'over.rest1': 'Il reste 1 case libre, mais elle est trop petite pour vos pièces.',
+      'over.restN': 'Il reste {n} cases libres, mais l\'espace est trop morcelé pour vos pièces.',
+      'over.limit': 'Limite de coups atteinte : {n} coups sans atteindre l\'objectif.',
+      'stats.level': 'Niveau {n}',
+      'stats.levelBest': 'Niveau {n} (record : {best})',
+      'stats.lines': plural('ligne', 'lignes', true),
+      'stats.moves': plural('coup', 'coups', true),
+      'stats.grid': 'grille {size}×{size}',
+      'ask.restartLevel': 'Recommencer le niveau ? Votre progression dans ce niveau sera perdue.',
+      'ask.restart': 'Recommencer ? La partie en cours sera perdue.',
+      'ask.newAdventure': 'Une aventure est en cours. La recommencer au niveau 1 ?',
+      'ask.newGame': 'Une partie est en cours. La remplacer par une nouvelle partie ?',
+      'ask.fromLevel1': 'Recommencer au niveau 1 ? Votre progression (niveau {n}) sera perdue.',
+      'toast.lostNew': 'Sauvegarde illisible : nouvelle partie.',
+      'toast.lostIgnored': 'Sauvegarde illisible : elle a été ignorée.',
+      'toast.recovered': 'Sauvegarde réparée à partir de la copie de secours.',
+      'kind.points': 'Objectif',
+      'kind.obstacles': 'Terrain encombré',
+      'kind.multi': 'Doubles lignes',
+      'kind.combo': 'Défi combo',
+      'kind.moves': 'Coups limités',
+      'goal.points': 'Atteignez {target} points.',
+      'goal.obstacles': 'Terrain encombré : {prefill} blocs au départ. Atteignez {target} points.',
+      'goal.multi': 'Atteignez {target} points et effacez 2 lignes ou plus d\'un seul coup, {n} fois.',
+      'goal.combo': 'Atteignez {target} points et réalisez un combo ×{n}.',
+      'goal.moves': 'Atteignez {target} points en {n} coups maximum.',
+      'hud.multi': 'Doubles {a}/{b}',
+      'hud.combo': 'Combo ×{a}/×{b}',
+      'hud.moves': 'Coups {a}/{b}'
+    },
+    en: {
+      'meta.title': 'Tessera Block — block puzzle',
+      'meta.desc': 'Tessera Block: a block puzzle. Place the pieces, complete rows and columns, chain combos.',
+      'startError': 'Tessera Block could not start.',
+      'lang.label': 'Language',
+      'aria.board': 'Game board',
+      'tagline': 'The block puzzle',
+      'mode.label': 'Game mode',
+      'mode.classic': 'Classic',
+      'mode.adventure': 'Adventure',
+      'bestScore': 'Best score',
+      'bestLevel': 'Best level: {n}',
+      'score': 'Score',
+      'home': 'Home',
+      'play': 'PLAY',
+      'continue': 'CONTINUE',
+      'newGame': 'New game',
+      'newAdventure': 'New adventure',
+      'pause': 'Pause',
+      'resume': 'Resume',
+      'restart': 'Restart',
+      'restartLevel': 'Restart level',
+      'replay': 'Replay',
+      'again': 'PLAY AGAIN',
+      'againLevel': 'REPLAY LEVEL {n}',
+      'gameOver': 'Game over',
+      'newRecord': 'New record!',
+      'bonus.btn': 'Watch an ad',
+      'bonus.title': 'Earn 40 points',
+      'bonus.text': 'Watch the ad to the end: the 40 points are added to your score.',
+      'bonus.loading': 'Loading the ad…',
+      'bonus.wait': 'Reward in {n} s',
+      'bonus.done': '+{n} points added to your score!',
+      'bonus.fail': 'No ad available right now. Try again later.',
+      'bonus.close': 'Close',
+      'bonus.ok': 'Continue',
+      'settings': 'Settings',
+      'close': 'Close',
+      'sound': 'Sound',
+      'music': 'Music',
+      'vibration': 'Vibration',
+      'grid': 'Grid',
+      'gridSize': 'Grid size',
+      'gridNote.game': 'Applies to the next Classic game.',
+      'gridNote.home': 'Grid size for Classic mode (Adventure is always played on 10 × 10).',
+      'footer': 'Version {v} · {storage}',
+      'storage.on': 'local save enabled',
+      'storage.off': 'save unavailable (this session only)',
+      'cancel': 'Cancel',
+      'confirm': 'Confirm',
+      'combo': 'COMBO ×{n}',
+      'praise.2': 'Nice!',
+      'praise.3': 'Great!',
+      'praise.4': 'Fantastic!',
+      'praise.5': 'Incredible!',
+      'perfect': 'PERFECT CLEAR!',
+      'levelBanner': 'LEVEL {n} COMPLETE!',
+      'hud.level': 'LEVEL {n}',
+      'levelTitle': 'Level {n}',
+      'levelDone': 'Level complete!',
+      'challenge': 'CHALLENGE · {title}',
+      'letsGo': 'LET\'S GO',
+      'info.adventure': 'Level {n} · {score} / {target} pts',
+      'info.classic': 'Game in progress · {score} pts · {size}×{size} grid',
+      'info.pause': 'Level {n} · {points} pts',
+      'over.full': 'The board is full.',
+      'over.stuck': 'No piece can be placed anymore. {rest}',
+      'over.rest1': '1 cell is left, but it is too small for your pieces.',
+      'over.restN': '{n} cells are left, but the space is too fragmented for your pieces.',
+      'over.limit': 'Move limit reached: {n} moves without reaching the goal.',
+      'stats.level': 'Level {n}',
+      'stats.levelBest': 'Level {n} (best: {best})',
+      'stats.lines': plural('line', 'lines', false),
+      'stats.moves': plural('move', 'moves', false),
+      'stats.grid': '{size}×{size} grid',
+      'ask.restartLevel': 'Restart the level? Your progress in this level will be lost.',
+      'ask.restart': 'Restart? The current game will be lost.',
+      'ask.newAdventure': 'An adventure is in progress. Restart it from level 1?',
+      'ask.newGame': 'A game is in progress. Replace it with a new game?',
+      'ask.fromLevel1': 'Restart from level 1? Your progress (level {n}) will be lost.',
+      'toast.lostNew': 'Unreadable save: starting a new game.',
+      'toast.lostIgnored': 'Unreadable save: it was ignored.',
+      'toast.recovered': 'Save restored from the backup copy.',
+      'kind.points': 'Goal',
+      'kind.obstacles': 'Crowded board',
+      'kind.multi': 'Multi-line clears',
+      'kind.combo': 'Combo challenge',
+      'kind.moves': 'Limited moves',
+      'goal.points': 'Reach {target} points.',
+      'goal.obstacles': 'Crowded board: {prefill} blocks at the start. Reach {target} points.',
+      'goal.multi': 'Reach {target} points and clear 2 or more lines with a single move, {n} times.',
+      'goal.combo': 'Reach {target} points and get a ×{n} combo.',
+      'goal.moves': 'Reach {target} points in {n} moves or fewer.',
+      'hud.multi': 'Multi {a}/{b}',
+      'hud.combo': 'Combo ×{a}/×{b}',
+      'hud.moves': 'Moves {a}/{b}'
+    }
+  };
+
+  let lang = DEFAULT_LANG;
+
+  const isLang = (code) => LANGS.indexOf(code) >= 0;
+
+  /* Texte d'une clé dans la langue courante ; à défaut la version française, à défaut la clé elle-même (jamais de plantage). */
+  function t(key, params) {
+    let v = DICT[lang][key];
+    if (v === undefined) v = DICT[DEFAULT_LANG][key];
+    if (v === undefined) return String(key);
+    const p = params || {};
+    if (typeof v === 'function') return v(p);
+    return v.replace(/\{(\w+)\}/g, (m, name) => (p[name] === undefined ? m : String(p[name])));
+  }
+
+  function setLang(code) {
+    lang = isLang(code) ? code : DEFAULT_LANG;
+    return lang;
+  }
+
+  /* Applique la langue courante au texte fixe de la page :
+   *   data-i18n="clé"        → texte de l'élément
+   *   data-i18n-aria="clé"   → attribut aria-label
+   *   data-i18n-title="clé"  → attribut title
+   *   data-i18n-content="clé"→ attribut content (balise meta de description)
+   * ainsi qu'au titre de l'onglet et à l'attribut lang de la page. */
+  function applyDom(doc) {
+    doc.documentElement.setAttribute('lang', lang);
+    doc.title = t('meta.title');
+    doc.querySelectorAll('[data-i18n]').forEach((e) => {
+      e.textContent = t(e.getAttribute('data-i18n'));
+    });
+    [['data-i18n-aria', 'aria-label'], ['data-i18n-title', 'title'], ['data-i18n-content', 'content']].forEach((pair) => {
+      doc.querySelectorAll('[' + pair[0] + ']').forEach((e) => {
+        e.setAttribute(pair[1], t(e.getAttribute(pair[0])));
+      });
+    });
+  }
+
+  const api = {
+    LANGS, DEFAULT_LANG, NAMES, DICT, isLang, t, setLang, applyDom,
+    get lang() {
+      return lang;
+    }
+  };
+  PB.i18n = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== engine.js ===== */
+/* Tessera Block — moteur de jeu pur (aucun DOM, aucune horloge, aucun Math.random).
+ * Rôle : pièces, placement, lignes, score, combos, tirage équitable, fin de partie, sérialisation. */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+  const CFG = PB.CONFIG || (typeof require === 'function' ? require('./config.js') : null);
+  const SC = CFG.score;
+  const PALETTE_SIZE = 7;
+
+  /* ------------------------------------------------------------------ Pièces */
+  /* Chaque pièce = liste de coordonnées [ligne, colonne], normalisées (min = 0).
+   * Les orientations sont générées ici, à la conception : le joueur ne peut PAS tourner. */
+  function parseArt(art) {
+    const cells = [];
+    art.forEach((row, r) => {
+      for (let c = 0; c < row.length; c++) if (row[c] === 'X') cells.push([r, c]);
+    });
+    return cells;
+  }
+  function normalize(cells) {
+    let mr = Infinity;
+    let mc = Infinity;
+    for (const p of cells) {
+      if (p[0] < mr) mr = p[0];
+      if (p[1] < mc) mc = p[1];
+    }
+    return cells.map((p) => [p[0] - mr, p[1] - mc]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  }
+  const rot90 = (cells) => normalize(cells.map((p) => [p[1], -p[0]]));
+  const mirror = (cells) => normalize(cells.map((p) => [p[0], -p[1]]));
+
+  function orientations(cells, mode) {
+    const base = normalize(cells);
+    if (mode === 'none') return [base];
+    const out = [];
+    const spin = (start, n) => {
+      let cur = start;
+      for (let i = 0; i < n; i++) {
+        out.push(cur);
+        cur = rot90(cur);
+      }
+    };
+    spin(base, mode === 'rot2' ? 2 : 4);
+    if (mode === 'rot4m') spin(mirror(base), 4);
+    const seen = new Set();
+    return out.filter((o) => {
+      const key = o.map((p) => p.join(',')).join(';');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  /* color = indice de palette 1..7 (fixe par famille). weight = fréquence relative. */
+  const FAMILIES = [
+    { key: 'dot', art: ['X'], mode: 'none', color: 4, weight: 2 },
+    { key: 'i2', art: ['XX'], mode: 'rot2', color: 2, weight: 6 },
+    { key: 'i3', art: ['XXX'], mode: 'rot2', color: 2, weight: 7 },
+    { key: 'i4', art: ['XXXX'], mode: 'rot2', color: 2, weight: 5 },
+    { key: 'i5', art: ['XXXXX'], mode: 'rot2', color: 2, weight: 3 },
+    { key: 'o2', art: ['XX', 'XX'], mode: 'none', color: 1, weight: 6 },
+    { key: 'o3', art: ['XXX', 'XXX', 'XXX'], mode: 'none', color: 6, weight: 2.5 },
+    { key: 'r23', art: ['XXX', 'XXX'], mode: 'rot2', color: 7, weight: 3 },
+    { key: 'l3', art: ['X.', 'XX'], mode: 'rot4', color: 4, weight: 6 },
+    { key: 'l5', art: ['X..', 'X..', 'XXX'], mode: 'rot4', color: 5, weight: 3 },
+    { key: 'l4', art: ['X.', 'X.', 'XX'], mode: 'rot4m', color: 3, weight: 7 },
+    { key: 't4', art: ['XXX', '.X.'], mode: 'rot4', color: 6, weight: 6 },
+    { key: 'sz', art: ['.XX', 'XX.'], mode: 'rot4m', color: 5, weight: 5 },
+    { key: 'w5', art: ['X..', 'XX.', '.XX'], mode: 'rot4', color: 1, weight: 2 },
+    { key: 't5', art: ['XXX', '.X.', '.X.'], mode: 'rot4', color: 4, weight: 2 },
+    { key: 'd2', art: ['X.', '.X'], mode: 'rot2', color: 3, weight: 1 },
+    { key: 'd3', art: ['X..', '.X.', '..X'], mode: 'rot2', color: 7, weight: 1 }
+  ];
+
+  const SHAPES = [];
+  const SHAPE_BY_ID = Object.create(null);
+  FAMILIES.forEach((f) => {
+    const list = orientations(parseArt(f.art), f.mode);
+    list.forEach((cells, variant) => {
+      let w = 0;
+      let h = 0;
+      for (const p of cells) {
+        if (p[0] + 1 > h) h = p[0] + 1;
+        if (p[1] + 1 > w) w = p[1] + 1;
+      }
+      const rowCounts = new Array(h).fill(0);
+      const colCounts = new Array(w).fill(0);
+      for (const p of cells) {
+        rowCounts[p[0]]++;
+        colCounts[p[1]]++;
+      }
+      const shape = {
+        id: f.key + '_' + variant,
+        index: SHAPES.length,
+        family: f.key,
+        variant,
+        cells,
+        w,
+        h,
+        size: cells.length,
+        color: f.color,
+        weight: f.weight / list.length,
+        rowCounts,
+        colCounts
+      };
+      SHAPES.push(shape);
+      SHAPE_BY_ID[shape.id] = shape;
+    });
+  });
+  const isShapeId = (id) => typeof id === 'string' && SHAPE_BY_ID[id] !== undefined;
+
+  /* ------------------------------------------------------------------ Grille */
+  const createGrid = (size) => new Uint8Array(size * size);
+
+  function canPlaceAt(grid, size, shape, r, c) {
+    for (let i = 0; i < shape.cells.length; i++) {
+      const rr = r + shape.cells[i][0];
+      const cc = c + shape.cells[i][1];
+      if (rr < 0 || rr >= size || cc < 0 || cc >= size) return false;
+      if (grid[rr * size + cc] !== 0) return false;
+    }
+    return true;
+  }
+  function anyPlacement(grid, size, shape) {
+    for (let r = 0; r <= size - shape.h; r++)
+      for (let c = 0; c <= size - shape.w; c++) if (canPlaceAt(grid, size, shape, r, c)) return true;
+    return false;
+  }
+  function lineCounts(grid, size) {
+    const rows = new Array(size).fill(0);
+    const cols = new Array(size).fill(0);
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++)
+        if (grid[r * size + c]) {
+          rows[r]++;
+          cols[c]++;
+        }
+    return { rows, cols };
+  }
+  function occupancy(grid) {
+    let n = 0;
+    for (let i = 0; i < grid.length; i++) if (grid[i]) n++;
+    return n / grid.length;
+  }
+  const isEmpty = (grid) => grid.every((v) => v === 0);
+
+  /* Pose la pièce puis efface les lignes/colonnes complètes. MUTE la grille.
+   * Une case à l'intersection d'une ligne et d'une colonne n'est effacée (et comptée) qu'une fois. */
+  function placeAndClear(grid, size, shape, r, c, color) {
+    for (const p of shape.cells) grid[(r + p[0]) * size + (c + p[1])] = color;
+    const lc = lineCounts(grid, size);
+    const rows = [];
+    const cols = [];
+    for (let i = 0; i < size; i++) {
+      if (lc.rows[i] === size) rows.push(i);
+      if (lc.cols[i] === size) cols.push(i);
+    }
+    const cleared = [];
+    if (rows.length || cols.length) {
+      const mark = new Uint8Array(size * size);
+      for (const i of rows) for (let j = 0; j < size; j++) mark[i * size + j] = 1;
+      for (const j of cols) for (let i = 0; i < size; i++) mark[i * size + j] = 1;
+      for (let k = 0; k < mark.length; k++)
+        if (mark[k]) {
+          cleared.push([Math.floor(k / size), k % size, grid[k]]);
+          grid[k] = 0;
+        }
+    }
+    return { rows, cols, cleared };
+  }
+
+  /* ------------------------------------------------------------------- Score */
+  /* Règles documentées dans docs/CAHIER_DES_CHARGES.md §4. combo = valeur APRÈS ce coup. */
+  function scoreMove(cellCount, lines, combo, perfect) {
+    const placement = cellCount * SC.perCell;
+    const multiplier = lines > 0 ? Math.min(Math.max(combo, 1), SC.comboCap) : 0;
+    const linePts = lines > 0 ? SC.linePoints * lines * lines * multiplier : 0;
+    const perfectBonus = perfect ? SC.perfectClear : 0;
+    return { placement, lines: linePts, multiplier, perfect: perfectBonus, total: placement + linePts + perfectBonus };
+  }
+
+  /* ------------------------------------------------------- Aléa à graine */
+  function nextRandom(obj) {
+    // mulberry32 : tout l'état tient dans un entier 32 bits (obj.rngState) → facile à sauvegarder
+    let t = (obj.rngState = (obj.rngState + 0x6d2b79f5) >>> 0);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function pickWeighted(weights, rng) {
+    let total = 0;
+    for (const w of weights) total += w;
+    let x = rng() * total;
+    for (let i = 0; i < weights.length; i++) {
+      x -= weights[i];
+      if (x < 0) return i;
+    }
+    return weights.length - 1;
+  }
+
+  /* --------------------------------------------------------------- Tirage */
+  /* true = toutes les pièces se posent dans un certain ordre (lignes effacées entre deux pièces
+   * comprises) ; false = impossible ; null = budget de recherche dépassé (inconnu). */
+  function canPlaceAllInSomeOrder(grid, size, shapes, budget) {
+    const st = { nodes: 0, budget };
+    const search = (g, rest) => {
+      if (rest.length === 0) return true;
+      const tried = new Set();
+      for (let i = 0; i < rest.length; i++) {
+        const s = rest[i];
+        if (tried.has(s.id)) continue;
+        tried.add(s.id);
+        const others = rest.filter((_, k) => k !== i);
+        for (let r = 0; r <= size - s.h; r++)
+          for (let c = 0; c <= size - s.w; c++) {
+            if (!canPlaceAt(g, size, s, r, c)) continue;
+            if (++st.nodes > st.budget) return null;
+            const g2 = g.slice();
+            placeAndClear(g2, size, s, r, c, s.color);
+            const res = search(g2, others);
+            if (res !== false) return res;
+          }
+      }
+      return false;
+    };
+    return search(grid, shapes);
+  }
+
+  function canCompleteLine(grid, size, shape, lc) {
+    for (let r = 0; r <= size - shape.h; r++)
+      for (let c = 0; c <= size - shape.w; c++) {
+        if (!canPlaceAt(grid, size, shape, r, c)) continue;
+        for (let i = 0; i < shape.h; i++) if (shape.rowCounts[i] && lc.rows[r + i] + shape.rowCounts[i] === size) return true;
+        for (let j = 0; j < shape.w; j++) if (shape.colCounts[j] && lc.cols[c + j] + shape.colCounts[j] === size) return true;
+      }
+    return false;
+  }
+
+  /* Trois ids de pièces. Priorité : (A) toutes posables dans un ordre, (B) chacune posable,
+   * (C) au moins une posable. Favorise les petites formes quand la grille se remplit. */
+  function generateTray(grid, size, rng, prevIds) {
+    const G = CFG.generator;
+    const occ = occupancy(grid);
+    const lc = occ >= 0.5 ? lineCounts(grid, size) : null;
+    const prevFamilies = new Set((prevIds || []).filter(isShapeId).map((id) => SHAPE_BY_ID[id].family));
+    const placeable = [];
+    const base = SHAPES.map((s, i) => {
+      placeable[i] = anyPlacement(grid, size, s);
+      let w = s.weight;
+      if (!placeable[i]) w *= 0.2;
+      if (occ >= 0.5) {
+        if (s.size <= 3) w *= 1.8;
+        else if (s.size >= 5) w *= 0.5;
+        if (placeable[i] && canCompleteLine(grid, size, s, lc)) w *= 2.2;
+      } else if (occ < 0.25 && s.size >= 4) w *= 1.25;
+      if (prevFamilies.has(s.family)) w *= 0.5;
+      return w;
+    });
+    const drawTrio = (first) => {
+      const w = base.slice();
+      const trio = [];
+      for (let k = 0; k < CFG.traySize; k++) {
+        const idx = k === 0 && first ? first.index : pickWeighted(w, rng);
+        const picked = SHAPES[idx];
+        trio.push(picked);
+        for (let j = 0; j < SHAPES.length; j++) {
+          if (j === idx) w[j] *= 0.1;
+          else if (SHAPES[j].family === picked.family) w[j] *= 0.5;
+        }
+      }
+      return trio;
+    };
+    const ids = (trio) => trio.map((s) => s.id);
+    let levelB = null;
+    let levelC = null;
+    for (let a = 0; a < G.attempts; a++) {
+      const trio = drawTrio();
+      if (trio[0].id === trio[1].id && trio[1].id === trio[2].id) continue;
+      if (canPlaceAllInSomeOrder(grid, size, trio, G.searchBudget) === true) return ids(trio);
+      const n = trio.filter((s) => placeable[s.index]).length;
+      if (n === trio.length && !levelB) levelB = trio;
+      if (n >= 1 && !levelC) levelC = trio;
+    }
+    if (levelB) return ids(levelB);
+    if (levelC) return ids(levelC);
+    const only = base.map((w, i) => (placeable[i] ? w : 0));
+    if (only.some((w) => w > 0)) return ids(drawTrio(SHAPES[pickWeighted(only, rng)]));
+    return ['dot_0', 'i2_0', 'i2_1']; // grille pleine : la partie est perdue de toute façon
+  }
+
+  /* ------------------------------------------------------- Sérialisation */
+  const gridToString = (grid) => Array.prototype.join.call(grid, '');
+  function gridFromString(str, size) {
+    const g = createGrid(size);
+    for (let i = 0; i < g.length; i++) g[i] = str.charCodeAt(i) - 48;
+    return g;
+  }
+  /* Renvoie null si l'état est sain, sinon une courte raison. Ne lève jamais d'exception. */
+  function validateState(d) {
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return 'format';
+    if (d.v !== 1) return 'version';
+    if (CFG.gridSizes.indexOf(d.size) < 0) return 'taille';
+    if (typeof d.grid !== 'string' || d.grid.length !== d.size * d.size || !/^[0-7]+$/.test(d.grid)) return 'grille';
+    if (!Array.isArray(d.tray) || d.tray.length !== CFG.traySize) return 'pièces';
+    if (d.tray.some((id) => id !== null && !isShapeId(id))) return 'pièce inconnue';
+    if (d.tray.every((id) => id === null)) return 'pièces vides';
+    if (!Array.isArray(d.dealt) || d.dealt.length > CFG.traySize || !d.dealt.every(isShapeId)) return 'tirage';
+    for (const k of ['score', 'combo', 'miss', 'moves', 'lines', 'bestCombo', 'rng', 'seed']) {
+      if (!Number.isInteger(d[k]) || d[k] < 0 || d[k] > 4294967295) return 'nombre ' + k;
+    }
+    if (d.score > 1e9 || d.miss > SC.comboGrace) return 'valeur hors limites';
+    if (d.adv !== undefined) {
+      const a = d.adv;
+      if (!a || typeof a !== 'object' || Array.isArray(a)) return 'aventure';
+      if (!Number.isInteger(a.level) || a.level < 1 || a.level > 9999) return 'niveau';
+      for (const k of ['score', 'moves', 'lines', 'maxCombo']) if (!Number.isInteger(a[k]) || a[k] < 0 || a[k] > 1e9) return 'compteur ' + k;
+      if (a.multi !== undefined && (!Number.isInteger(a.multi) || a.multi < 0 || a.multi > 1e9)) return 'compteur multi';
+    }
+    const lc = lineCounts(gridFromString(d.grid, d.size), d.size);
+    if (lc.rows.some((n) => n === d.size) || lc.cols.some((n) => n === d.size)) return 'ligne complète';
+    return null;
+  }
+
+  /* ------------------------------------------------------------------ Partie */
+  class Game {
+    constructor(opts) {
+      opts = opts || {};
+      const size = opts.size || CFG.defaultGridSize;
+      if (CFG.gridSizes.indexOf(size) < 0) throw new Error('Taille de grille non prise en charge : ' + size);
+      this.size = size;
+      this.seed = (opts.seed === undefined ? 1 : opts.seed) >>> 0;
+      this.rngState = this.seed;
+      this.grid = createGrid(size);
+      this.tray = new Array(CFG.traySize).fill(null);
+      this.dealt = [];
+      this.score = 0;
+      this.combo = 0;
+      this.miss = 0;
+      this.moves = 0;
+      this.linesCleared = 0;
+      this.bestCombo = 0;
+      this.adv = null; // compteurs du niveau en cours (mode Aventure), null en mode classique
+      this.over = false;
+      if (!opts._blank) {
+        this.refill();
+        this.over = !this.anyMove();
+      }
+    }
+
+    /* Nouveau plateau (changement de niveau) : combo remis à zéro, nouveau tirage. Le score total est conservé. */
+    startLevel(grid) {
+      this.grid = grid;
+      this.combo = 0;
+      this.miss = 0;
+      this.dealt = [];
+      this.tray = new Array(CFG.traySize).fill(null);
+      this.refill();
+      this.over = !this.anyMove();
+    }
+    refill() {
+      const ids = generateTray(this.grid, this.size, () => nextRandom(this), this.dealt);
+      this.tray = ids.slice();
+      this.dealt = ids.slice();
+    }
+    shapeAt(i) {
+      return this.tray[i] ? SHAPE_BY_ID[this.tray[i]] : null;
+    }
+    anyMove() {
+      return this.tray.some((id) => id && anyPlacement(this.grid, this.size, SHAPE_BY_ID[id]));
+    }
+    canPlace(i, r, c) {
+      if (this.over || !Number.isInteger(r) || !Number.isInteger(c) || !this.tray[i]) return false;
+      return canPlaceAt(this.grid, this.size, SHAPE_BY_ID[this.tray[i]], r, c);
+    }
+    /* Aperçu sans modifier la partie : lignes/colonnes qui seraient effacées. */
+    preview(i, r, c) {
+      if (!this.canPlace(i, r, c)) return { valid: false, rows: [], cols: [] };
+      const s = SHAPE_BY_ID[this.tray[i]];
+      const res = placeAndClear(this.grid.slice(), this.size, s, r, c, s.color);
+      return { valid: true, rows: res.rows, cols: res.cols };
+    }
+
+    place(i, r, c) {
+      if (this.over) return { ok: false, reason: 'over' };
+      if (!Number.isInteger(i) || i < 0 || i >= this.tray.length || !this.tray[i]) return { ok: false, reason: 'slot' };
+      if (!Number.isInteger(r) || !Number.isInteger(c)) return { ok: false, reason: 'args' };
+      const shape = SHAPE_BY_ID[this.tray[i]];
+      for (const p of shape.cells) {
+        const rr = r + p[0];
+        const cc = c + p[1];
+        if (rr < 0 || rr >= this.size || cc < 0 || cc >= this.size) return { ok: false, reason: 'bounds' };
+      }
+      if (!canPlaceAt(this.grid, this.size, shape, r, c)) return { ok: false, reason: 'occupied' };
+
+      const placed = shape.cells.map((p) => [r + p[0], c + p[1]]);
+      const res = placeAndClear(this.grid, this.size, shape, r, c, shape.color);
+      const lines = res.rows.length + res.cols.length;
+      const perfect = lines > 0 && isEmpty(this.grid);
+
+      let comboBroken = false;
+      if (lines > 0) {
+        this.combo += 1;
+        this.miss = 0;
+      } else if (this.combo > 0) {
+        this.miss += 1;
+        if (this.miss > SC.comboGrace) {
+          this.combo = 0;
+          this.miss = 0;
+          comboBroken = true;
+        }
+      }
+      const points = scoreMove(shape.size, lines, this.combo, perfect);
+      this.score += points.total;
+      this.moves += 1;
+      this.linesCleared += lines;
+      if (this.combo > this.bestCombo) this.bestCombo = this.combo;
+
+      this.tray[i] = null;
+      let refilled = false;
+      if (this.tray.every((id) => id === null)) {
+        this.refill();
+        refilled = true;
+      }
+      this.over = !this.anyMove();
+      return {
+        ok: true,
+        trayIndex: i,
+        shapeId: shape.id,
+        color: shape.color,
+        r,
+        c,
+        placed,
+        rows: res.rows,
+        cols: res.cols,
+        cleared: res.cleared,
+        lines,
+        perfect,
+        combo: this.combo,
+        comboBroken,
+        points,
+        score: this.score,
+        refilled,
+        newTray: refilled ? this.tray.slice() : null,
+        over: this.over
+      };
+    }
+
+    /* Coup glouton (lignes, puis compacité). Sert aux tests automatiques et à de futurs indices. */
+    findBestMove() {
+      let best = null;
+      for (let i = 0; i < this.tray.length; i++) {
+        const s = this.shapeAt(i);
+        if (!s) continue;
+        for (let r = 0; r <= this.size - s.h; r++)
+          for (let c = 0; c <= this.size - s.w; c++) {
+            if (!canPlaceAt(this.grid, this.size, s, r, c)) continue;
+            let touching = 0;
+            for (const p of s.cells)
+              for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const rr = r + p[0] + d[0];
+                const cc = c + p[1] + d[1];
+                if (rr < 0 || rr >= this.size || cc < 0 || cc >= this.size || this.grid[rr * this.size + cc]) touching++;
+              }
+            const res = placeAndClear(this.grid.slice(), this.size, s, r, c, s.color);
+            const val = (res.rows.length + res.cols.length) * 100 + touching;
+            if (!best || val > best.val) best = { i, r, c, val };
+          }
+      }
+      return best && { i: best.i, r: best.r, c: best.c };
+    }
+
+    serialize() {
+      return {
+        v: 1,
+        size: this.size,
+        grid: gridToString(this.grid),
+        tray: this.tray.slice(),
+        dealt: this.dealt.slice(),
+        score: this.score,
+        combo: this.combo,
+        miss: this.miss,
+        moves: this.moves,
+        lines: this.linesCleared,
+        bestCombo: this.bestCombo,
+        rng: this.rngState >>> 0,
+        seed: this.seed,
+        ...(this.adv ? { adv: Object.assign({}, this.adv) } : {})
+      };
+    }
+    static fromState(d) {
+      const err = validateState(d);
+      if (err) throw new Error('Sauvegarde invalide : ' + err);
+      const g = new Game({ size: d.size, seed: d.seed, _blank: true });
+      g.grid = gridFromString(d.grid, d.size);
+      g.tray = d.tray.slice();
+      g.dealt = d.dealt.slice();
+      g.score = d.score;
+      g.combo = d.combo;
+      g.miss = d.miss;
+      g.moves = d.moves;
+      g.linesCleared = d.lines;
+      g.bestCombo = d.bestCombo;
+      g.rngState = d.rng >>> 0;
+      g.adv = d.adv ? Object.assign({}, d.adv) : null;
+      g.over = !g.anyMove();
+      return g;
+    }
+  }
+
+  PB.engine = {
+    PALETTE_SIZE,
+    FAMILIES,
+    SHAPES,
+    SHAPE_BY_ID,
+    Game,
+    createGrid,
+    canPlaceAt,
+    anyPlacement,
+    placeAndClear,
+    lineCounts,
+    occupancy,
+    scoreMove,
+    generateTray,
+    canPlaceAllInSomeOrder,
+    nextRandom,
+    validateState,
+    gridToString,
+    gridFromString
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = PB.engine;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== levels.js ===== */
+/* Tessera Block — mode Aventure : niveaux illimités.
+ * Règle de base : atteindre 1000 points DANS le niveau pour passer au suivant.
+ * Dès le niveau 5, un défi s'ajoute, en rotation de 4 types dont l'intensité croît à chaque tour :
+ * terrain encombré, lignes à effacer, combo à atteindre, coups limités.
+ * Module pur (aucun DOM, aucune horloge) : tout est déterminé par le numéro de niveau et la graine de la partie. */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+  const E = PB.engine || (typeof require === 'function' ? require('./engine.js') : null);
+  const I = PB.i18n || (typeof require === 'function' ? require('./i18n.js') : null);
+
+  const TARGET = 1000; // points à marquer dans chaque niveau
+  const FIRST_CHALLENGE = 5;
+  const MAX_LEVEL = 9999;
+  const KINDS = ['obstacles', 'multi', 'combo', 'moves'];
+
+  /* Description complète d'un niveau (pure : même numéro → même résultat). */
+  function levelSpec(level) {
+    level = Math.max(1, Math.min(MAX_LEVEL, Math.floor(level) || 1));
+    const spec = { level, target: TARGET, kind: 'points', prefill: 0, goalMulti: 0, goalCombo: 0, moveLimit: 0 };
+    if (level >= FIRST_CHALLENGE) {
+      const k = level - FIRST_CHALLENGE;
+      const tier = Math.floor(k / KINDS.length); // numéro du tour de rotation : 0, 1, 2…
+      spec.kind = KINDS[k % KINDS.length];
+      if (spec.kind === 'obstacles') spec.prefill = Math.min(12 + 4 * tier, 40);
+      else if (spec.kind === 'multi') spec.goalMulti = Math.min(2 + tier, 6);
+      else if (spec.kind === 'combo') spec.goalCombo = Math.min(4 + tier, 8);
+      else spec.moveLimit = Math.max(62, 110 - 5 * tier);
+    }
+    // Textes dans la langue courante : à redemander (levelSpec) après un changement de langue.
+    spec.title = I.t('kind.' + spec.kind);
+    spec.text = describe(spec);
+    return spec;
+  }
+
+  function describe(s) {
+    const p = { target: s.target, prefill: s.prefill, n: s.goalMulti || s.goalCombo || s.moveLimit };
+    return I.t('goal.' + s.kind, p);
+  }
+
+  /* ---------------------------------------------------------- Compteurs du niveau */
+  const newAdv = (level) => ({ level: Math.max(1, Math.min(MAX_LEVEL, level | 0)), score: 0, moves: 0, lines: 0, maxCombo: 0, multi: 0 });
+
+  /* Met à jour les compteurs avec le résultat d'un coup (retour de Game.place). */
+  function applyMove(adv, res) {
+    adv.score += res.points.total;
+    adv.moves += 1;
+    adv.lines += res.lines;
+    if (res.lines >= 2) adv.multi = (adv.multi || 0) + 1;
+    if (res.combo > adv.maxCombo) adv.maxCombo = res.combo;
+  }
+
+  /* État du niveau : terminé, échoué (limite de coups) et progression pour l'affichage. */
+  function status(adv, spec) {
+    const pointsOk = adv.score >= spec.target;
+    const goalOk = (!spec.goalMulti || (adv.multi || 0) >= spec.goalMulti) && (!spec.goalCombo || adv.maxCombo >= spec.goalCombo);
+    const done = pointsOk && goalOk;
+    const failed = !done && spec.moveLimit > 0 && adv.moves >= spec.moveLimit;
+    let goal = '';
+    if (spec.goalMulti) goal = I.t('hud.multi', { a: Math.min(adv.multi || 0, spec.goalMulti), b: spec.goalMulti });
+    else if (spec.goalCombo) goal = I.t('hud.combo', { a: Math.min(adv.maxCombo, spec.goalCombo), b: spec.goalCombo });
+    else if (spec.moveLimit) goal = I.t('hud.moves', { a: adv.moves, b: spec.moveLimit });
+    return {
+      done,
+      failed,
+      reason: failed ? I.t('over.limit', { n: spec.moveLimit }) : '',
+      ratio: Math.max(0, Math.min(1, adv.score / spec.target)),
+      points: Math.min(adv.score, spec.target) + ' / ' + spec.target,
+      goal
+    };
+  }
+
+  /* ----------------------------------------------------------- Plateau de départ */
+  /* Blocs de départ posés par paquets, jamais plus de (taille − 4) par ligne ou colonne : aucune ligne n'est complète. */
+  function prefillGrid(size, count, seed) {
+    const grid = E.createGrid(size);
+    if (count <= 0) return grid;
+    const o = { rngState: seed >>> 0 };
+    const rnd = () => E.nextRandom(o);
+    const rowN = new Array(size).fill(0);
+    const colN = new Array(size).fill(0);
+    const cap = size - 4;
+    const free = (r, c) => r >= 0 && r < size && c >= 0 && c < size && !grid[r * size + c] && rowN[r] < cap && colN[c] < cap;
+    let placed = 0;
+    let guard = 0;
+    let r = 0;
+    let c = 0;
+    let chain = false;
+    while (placed < count && guard++ < 4000) {
+      if (!chain || !free(r, c)) {
+        r = Math.floor(rnd() * size);
+        c = Math.floor(rnd() * size);
+      }
+      if (free(r, c)) {
+        grid[r * size + c] = 1 + Math.floor(rnd() * E.PALETTE_SIZE);
+        rowN[r]++;
+        colN[c]++;
+        placed++;
+        chain = rnd() < 0.6; // 60 % : le bloc suivant se colle au précédent
+        if (chain) {
+          const d = Math.floor(rnd() * 4);
+          r += d === 0 ? 1 : d === 1 ? -1 : 0;
+          c += d === 2 ? 1 : d === 3 ? -1 : 0;
+        }
+      } else chain = false;
+    }
+    return grid;
+  }
+
+  /* Lance (ou relance) un niveau sur la partie : plateau de départ, compteurs à zéro, nouveau tirage.
+   * Essaie plusieurs dispositions jusqu'à ce qu'au moins une pièce soit jouable. */
+  function startLevel(game, level) {
+    const spec = levelSpec(level);
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const seed = ((game.seed ^ Math.imul(spec.level, 2654435761)) + attempt * 40503) >>> 0;
+      game.startLevel(prefillGrid(game.size, spec.prefill, seed));
+      if (!game.over) break;
+    }
+    game.adv = newAdv(spec.level);
+    return spec;
+  }
+
+  /* À appeler après chaque coup réussi. Renvoie 'level' (niveau réussi), 'failed' (échec) ou 'none'. */
+  function afterMove(game, res) {
+    if (!game.adv) return 'none';
+    applyMove(game.adv, res);
+    const st = status(game.adv, levelSpec(game.adv.level));
+    if (st.done) return 'level';
+    if (st.failed) return 'failed';
+    return 'none';
+  }
+
+  /* Passe au niveau suivant (plateau neuf, tirage neuf). Renvoie la spécification du nouveau niveau. */
+  function nextLevel(game) {
+    return startLevel(game, game.adv.level + 1);
+  }
+
+  const api = { TARGET, FIRST_CHALLENGE, MAX_LEVEL, levelSpec, newAdv, applyMove, status, prefillGrid, startLevel, afterMove, nextLevel };
+  PB.levels = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== storage.js ===== */
+/* Tessera Block — sauvegarde fiable.
+ * - deux copies alternées (.a / .b) : une copie complète survit toujours à une écriture interrompue ;
+ * - enveloppe { v, n (compteur), c (somme de contrôle FNV-1a), d (données en JSON) } ;
+ * - validation de structure avant toute utilisation ;
+ * - repli en mémoire si localStorage est absent, bloqué ou plein (le jeu reste jouable). */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+  const CFG = PB.CONFIG || (typeof require === 'function' ? require('./config.js') : null);
+  const E = PB.engine || (typeof require === 'function' ? require('./engine.js') : null);
+  const I = PB.i18n || (typeof require === 'function' ? require('./i18n.js') : null);
+
+  function fnv1a(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h = (h ^ str.charCodeAt(i)) >>> 0;
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h.toString(16).padStart(8, '0');
+  }
+
+  const MODES = ['classic', 'adventure'];
+  const DEFAULT_SETTINGS = Object.freeze({ sound: true, music: false, vibration: true, gridSize: CFG.defaultGridSize, mode: 'classic', lang: I.DEFAULT_LANG });
+  const isScore = (v) => Number.isInteger(v) && v >= 0 && v <= 1e9;
+
+  function createStore(backend, options) {
+    const prefix = (options && options.prefix) || CFG.storagePrefix;
+    const memory = new Map();
+    let persistent = !!backend;
+    if (persistent) {
+      try {
+        backend.setItem(prefix + 'probe', '1');
+        backend.removeItem(prefix + 'probe');
+      } catch (err) {
+        persistent = false;
+      }
+    }
+
+    const raw = {
+      get(key) {
+        if (persistent) {
+          try {
+            const v = backend.getItem(key);
+            return v === undefined ? null : v;
+          } catch (err) {
+            persistent = false;
+          }
+        }
+        return memory.has(key) ? memory.get(key) : null;
+      },
+      set(key, value) {
+        if (persistent) {
+          try {
+            backend.setItem(key, value);
+            return;
+          } catch (err) {
+            persistent = false; // quota dépassé ou accès refusé : on continue en mémoire
+          }
+        }
+        memory.set(key, value);
+      },
+      remove(key) {
+        memory.delete(key);
+        if (persistent) {
+          try {
+            backend.removeItem(key);
+          } catch (err) {
+            persistent = false;
+          }
+        }
+      }
+    };
+
+    const keyOf = (name, slot) => prefix + name + '.' + slot;
+    function decode(text) {
+      if (typeof text !== 'string') return null;
+      let env;
+      try {
+        env = JSON.parse(text);
+      } catch (err) {
+        return null;
+      }
+      if (!env || env.v !== 1 || !Number.isInteger(env.n) || typeof env.d !== 'string' || typeof env.c !== 'string') return null;
+      if (fnv1a(env.d) !== env.c) return null;
+      try {
+        return { n: env.n, payload: JSON.parse(env.d) };
+      } catch (err) {
+        return null;
+      }
+    }
+
+    /* Lit la copie valide la plus récente. status : 'empty' | 'ok' | 'recovered' | 'lost'. */
+    function read(name, validate) {
+      const texts = ['a', 'b'].map((s) => raw.get(keyOf(name, s)));
+      const decoded = texts.map((t) => {
+        const d = decode(t);
+        return d && (!validate || validate(d.payload)) ? d : null;
+      });
+      const good = decoded.filter(Boolean).sort((x, y) => y.n - x.n);
+      const damaged = texts.some((t, i) => t !== null && !decoded[i]);
+      if (!good.length) return { value: null, status: texts.some((t) => t !== null) ? 'lost' : 'empty' };
+      return { value: good[0].payload, status: damaged ? 'recovered' : 'ok' };
+    }
+    function write(name, payload) {
+      const slots = ['a', 'b'].map((s) => decode(raw.get(keyOf(name, s))));
+      const n = Math.max(slots[0] ? slots[0].n : 0, slots[1] ? slots[1].n : 0) + 1;
+      // on écrase la copie invalide ou la plus ancienne : l'autre reste intacte
+      const target = !slots[0] ? 'a' : !slots[1] ? 'b' : slots[0].n <= slots[1].n ? 'a' : 'b';
+      const body = JSON.stringify(payload);
+      raw.set(keyOf(name, target), JSON.stringify({ v: 1, n, c: fnv1a(body), d: body }));
+    }
+    function remove(name) {
+      raw.remove(keyOf(name, 'a'));
+      raw.remove(keyOf(name, 'b'));
+    }
+
+    /* ---- Réglages ---- */
+    function loadSettings() {
+      const out = Object.assign({}, DEFAULT_SETTINGS);
+      const v = read('settings', (p) => p && typeof p === 'object').value;
+      if (v) {
+        for (const k of ['sound', 'music', 'vibration']) if (typeof v[k] === 'boolean') out[k] = v[k];
+        if (CFG.gridSizes.indexOf(v.gridSize) >= 0) out.gridSize = v.gridSize;
+        if (MODES.indexOf(v.mode) >= 0) out.mode = v.mode;
+        if (I.isLang(v.lang)) out.lang = v.lang;
+      }
+      return out;
+    }
+    const saveSettings = (s) => write('settings', s);
+
+    /* ---- Meilleurs scores (un par taille de grille : 8 × 8 et 10 × 10 ne sont pas comparables) ---- */
+    function loadBest() {
+      const out = {};
+      CFG.gridSizes.forEach((s) => (out[s] = 0));
+      const v = read('best', (p) => p && typeof p === 'object').value;
+      if (v) for (const s of CFG.gridSizes) if (isScore(v[s])) out[s] = v[s];
+      return out;
+    }
+    /* Écrit uniquement si le score bat l'ancien record. Renvoie true si record battu. */
+    function saveBest(size, score) {
+      if (CFG.gridSizes.indexOf(size) < 0 || !isScore(score)) return false;
+      const best = loadBest();
+      if (score <= best[size]) return false;
+      best[size] = score;
+      write('best', best);
+      return true;
+    }
+
+    /* ---- Partie en cours ---- */
+    /* Deux parties peuvent coexister : classique (clé « game ») et aventure (clé « adv », état avec champ adv). */
+    const gameKey = (mode) => (mode === 'adventure' ? 'adv' : 'game');
+    const saveGame = (state) => write(gameKey(state && state.adv ? 'adventure' : 'classic'), state);
+    const loadGame = (mode) => {
+      const adventure = mode === 'adventure';
+      const r = read(gameKey(mode), (p) => E.validateState(p) === null && !!p.adv === adventure);
+      return { state: r.value, status: r.status };
+    };
+    const clearGame = (mode) => remove(gameKey(mode));
+
+    /* ---- Meilleurs résultats du mode Aventure : score total et niveau atteint, enregistrés séparément ---- */
+    function loadBestAdv() {
+      const v = read('bestAdv', (p) => p && typeof p === 'object').value;
+      return { score: v && isScore(v.score) ? v.score : 0, level: v && Number.isInteger(v.level) && v.level >= 1 && v.level <= 9999 ? v.level : 0 };
+    }
+    /* Renvoie { score: bool, level: bool } : quels records viennent d'être battus. */
+    function saveBestAdv(score, level) {
+      const cur = loadBestAdv();
+      const out = { score: isScore(score) && score > cur.score, level: Number.isInteger(level) && level >= 1 && level <= 9999 && level > cur.level };
+      if (out.score || out.level) write('bestAdv', { score: out.score ? score : cur.score, level: out.level ? level : cur.level });
+      return out;
+    }
+
+    /* ---- Historique des meilleures parties ---- */
+    const validEntry = (e) => e && isScore(e.score) && isScore(e.lines) && isScore(e.moves) && CFG.gridSizes.indexOf(e.size) >= 0;
+    function loadHistory() {
+      const v = read('history', Array.isArray).value;
+      return (v || []).filter(validEntry);
+    }
+    /* Renvoie le rang (1 = meilleure) ou 0 si la partie n'entre pas dans le classement. */
+    function addHistory(entry) {
+      if (!validEntry(entry)) return 0;
+      const clean = { score: entry.score, size: entry.size, lines: entry.lines, moves: entry.moves, date: String(entry.date || '') };
+      if (entry.mode === 'adventure' && Number.isInteger(entry.level) && entry.level >= 1 && entry.level <= 9999) {
+        clean.mode = 'adventure';
+        clean.level = entry.level;
+      }
+      const list = loadHistory().concat([clean]).sort((a, b) => b.score - a.score);
+      const kept = list.slice(0, CFG.historyMax);
+      write('history', kept);
+      const rank = kept.indexOf(clean);
+      return rank >= 0 ? rank + 1 : 0;
+    }
+
+    return {
+      get persistent() {
+        return persistent;
+      },
+      read, write, remove,
+      loadSettings, saveSettings,
+      loadBest, saveBest, loadBestAdv, saveBestAdv,
+      saveGame, loadGame, clearGame,
+      loadHistory, addHistory
+    };
+  }
+
+  function defaultBackend() {
+    try {
+      return root.localStorage || null;
+    } catch (err) {
+      return null; // accès refusé (iframe isolée, mode privé strict…)
+    }
+  }
+
+  PB.createStore = createStore;
+  PB.storage = createStore(defaultBackend());
+  PB.fnv1a = fnv1a;
+  PB.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { createStore, fnv1a, DEFAULT_SETTINGS };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== audio.js ===== */
+/* Tessera Block — effets sonores synthétisés (WebAudio), musique d'ambiance facultative, vibrations.
+ * Aucun fichier audio : tout est généré, donc le jeu reste léger et hors ligne.
+ * Le contexte audio n'est créé qu'au premier geste du joueur (règle des navigateurs). */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+
+  const SCALE = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51, 1567.98]; // pentatonique
+  const CHORDS = [[220, 261.63, 329.63], [174.61, 220, 261.63], [261.63, 329.63, 392], [196, 246.94, 293.66]];
+  const STEP = 60 / 84 / 2; // croche à 84 bpm
+
+  function createAudio(env) {
+    const Ctor = env.AudioContext || env.webkitAudioContext;
+    const state = { sound: true, music: false };
+    let ctx = null;
+    let sfx = null;
+    let bgm = null;
+    let noiseBuf = null;
+    let timer = null;
+    let nextT = 0;
+    let step = 0;
+    let suspended = false;
+
+    function ensure() {
+      if (ctx) return true;
+      if (!Ctor) return false;
+      try {
+        ctx = new Ctor();
+        const master = ctx.createGain();
+        master.gain.value = 0.9;
+        master.connect(ctx.destination);
+        sfx = ctx.createGain();
+        sfx.connect(master);
+        bgm = ctx.createGain();
+        bgm.gain.value = 0.0001;
+        bgm.connect(master);
+        return true;
+      } catch (err) {
+        ctx = null;
+        return false;
+      }
+    }
+
+    function tone(out, freq, t, dur, type, vol, to) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t);
+      if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g);
+      g.connect(out);
+      o.start(t);
+      o.stop(t + dur + 0.03);
+    }
+    function burst(t, dur, vol) {
+      if (!noiseBuf) {
+        const n = Math.floor(ctx.sampleRate * 0.1);
+        noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; // bruit audio uniquement, jamais la logique de jeu
+      }
+      const s = ctx.createBufferSource();
+      const g = ctx.createGain();
+      s.buffer = noiseBuf;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(g);
+      g.connect(sfx);
+      s.start(t);
+      s.stop(t + dur);
+    }
+
+    const recipes = {
+      click: (t) => tone(sfx, 480, t, 0.05, 'square', 0.07),
+      pick: (t) => tone(sfx, 620, t, 0.08, 'triangle', 0.16, 900),
+      drop: (t) => {
+        tone(sfx, 230, t, 0.13, 'sine', 0.35, 90);
+        burst(t, 0.05, 0.1);
+      },
+      invalid: (t) => tone(sfx, 160, t, 0.11, 'square', 0.09, 110),
+      clear: (t, a) => {
+        const lines = (a && a.lines) || 1;
+        const combo = (a && a.combo) || 1;
+        const n = Math.min(3 + lines * 2, 9);
+        const start = Math.min(combo - 1, 3);
+        for (let k = 0; k < n; k++) tone(sfx, SCALE[(start + k) % SCALE.length] * (start + k >= SCALE.length ? 2 : 1), t + k * 0.055, 0.24, 'triangle', 0.2);
+      },
+      combo: (t, a) => tone(sfx, SCALE[Math.min((a && a.combo) || 2, 8)] * 2, t + 0.05, 0.3, 'sine', 0.13),
+      perfect: (t) => [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98].forEach((f, k) => tone(sfx, f, t + k * 0.07, 0.5, 'sine', 0.2)),
+      gameover: (t) => [392, 330, 262, 196].forEach((f, k) => tone(sfx, f, t + k * 0.2, 0.3, 'triangle', 0.24)),
+      record: (t) => [523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((f, k) => tone(sfx, f, t + k * 0.09, 0.4, 'sine', 0.22))
+    };
+
+    function play(name, arg) {
+      if (!state.sound || suspended || !recipes[name] || !ensure()) return false;
+      recipes[name](ctx.currentTime + 0.005, arg);
+      return true;
+    }
+
+    /* Musique : planificateur à anticipation (un seul minuteur de 120 ms, arrêté en arrière-plan). */
+    function playStep(s, t) {
+      const chord = CHORDS[(s >> 3) % CHORDS.length];
+      tone(bgm, chord[s % 3] * (s % 8 >= 4 ? 2 : 1), t, STEP * 1.8, 'triangle', 0.18);
+      if (s % 8 === 0) tone(bgm, chord[0] / 2, t, STEP * 8, 'sine', 0.22);
+    }
+    function tick() {
+      if (!ctx) return;
+      while (nextT < ctx.currentTime + 0.3) {
+        playStep(step, nextT);
+        nextT += STEP;
+        step++;
+      }
+    }
+    function startMusic() {
+      if (timer || !ensure()) return;
+      bgm.gain.setTargetAtTime(0.16, ctx.currentTime, 0.3);
+      nextT = ctx.currentTime + 0.05;
+      timer = env.setInterval(tick, 120);
+      tick();
+    }
+    function stopMusic() {
+      if (timer) {
+        env.clearInterval(timer);
+        timer = null;
+      }
+      if (ctx && bgm) bgm.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.15);
+    }
+
+    return {
+      state,
+      get context() {
+        return ctx;
+      },
+      /* À appeler dans un geste du joueur (toucher/clic) : crée ou réveille le contexte audio. */
+      unlock() {
+        if (!ensure()) return false;
+        if (ctx.state === 'suspended' && !suspended) {
+          const p = ctx.resume();
+          if (p && p.catch) p.catch(() => {});
+        }
+        if (state.music && !timer && !suspended) startMusic();
+        return true;
+      },
+      /* Applique les réglages sans créer de contexte (le démarrage réel attend un geste). */
+      configure(s) {
+        state.sound = !!s.sound;
+        state.music = !!s.music;
+        if (ctx) (state.music && !suspended ? startMusic : stopMusic)();
+      },
+      play,
+      setSound(on) {
+        state.sound = !!on;
+      },
+      setMusic(on) {
+        state.music = !!on;
+        if (on) startMusic();
+        else stopMusic();
+      },
+      /* Application en arrière-plan : on coupe tout pour économiser la batterie. */
+      suspend() {
+        suspended = true;
+        if (timer) {
+          env.clearInterval(timer);
+          timer = null;
+        }
+        if (ctx && ctx.state === 'running') {
+          const p = ctx.suspend();
+          if (p && p.catch) p.catch(() => {});
+        }
+      },
+      resume() {
+        suspended = false;
+        if (ctx) {
+          const p = ctx.resume();
+          if (p && p.catch) p.catch(() => {});
+          if (state.music) startMusic();
+        }
+      },
+      _tick: tick
+    };
+  }
+
+  const haptics = {
+    enabled: true,
+    patterns: { tap: 6, pick: 8, drop: 14, clear: [18, 24, 28], combo: [20, 30, 40, 30, 60], over: [90, 50, 140] },
+    vibrate(pattern) {
+      if (!haptics.enabled) return false;
+      try {
+        const nav = root.navigator;
+        if (nav && typeof nav.vibrate === 'function') {
+          nav.vibrate(pattern);
+          return true;
+        }
+      } catch (err) {
+        /* certains navigateurs refusent sans geste récent : sans importance */
+      }
+      return false;
+    }
+  };
+
+  PB.createAudio = createAudio;
+  PB.audio = createAudio(root);
+  PB.haptics = haptics;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { createAudio, haptics };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== view.js ===== */
+/* Tessera Block — mise en page adaptative, sprites de blocs, rendu canvas, effets visuels.
+ * Ne connaît pas les règles : il dessine ce que le contrôleur lui donne. */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+
+  const PALETTE = ['#000000', '#ff5d73', '#ffb629', '#7ed957', '#1fd1b2', '#3da9fc', '#9b6bff', '#ff6ec7'];
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    const target = amt >= 0 ? 255 : 0;
+    const k = Math.abs(amt);
+    const ch = (v) => Math.round(v + (target - v) * k);
+    return 'rgb(' + ch((n >> 16) & 255) + ',' + ch((n >> 8) & 255) + ',' + ch(n & 255) + ')';
+  }
+  function rrect(g, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  /* Mise en page pure (testable sans navigateur). Portrait : barre haute, grille, pièces en bas.
+   * Paysage : panneau de score à gauche, grille au centre, pièces empilées à droite. */
+  function computeLayout(W, H, n, safe, adv) {
+    safe = safe || { top: 0, right: 0, bottom: 0, left: 0 };
+    const land = W > H * 1.15;
+    const pad = Math.max(10, Math.round(Math.min(W, H) * 0.03));
+    const innerW = W - safe.left - safe.right;
+    const innerH = H - safe.top - safe.bottom;
+    const slots = [];
+    let cell, bx, by, hud;
+    if (!land) {
+      const extra = adv ? clamp(Math.round(H * 0.075), 46, 72) : 0; // place de la barre de niveau (mode Aventure)
+      const hudH = clamp(Math.round(H * 0.15), 92, 170) + extra;
+      const trayH = clamp(Math.round(H * 0.17), 96, 240);
+      const availH = innerH - hudH - trayH;
+      cell = Math.max(10, Math.floor(Math.min(innerW - 2 * pad, availH - pad) / n));
+      const size = cell * n;
+      const free = Math.max(0, availH - size); // espace vertical restant : réparti autour de la grille
+      bx = Math.round(safe.left + (innerW - size) / 2);
+      by = Math.round(safe.top + hudH + free * 0.34);
+      hud = { x: safe.left, y: safe.top, w: innerW, h: hudH, extra };
+      const slotW = (innerW - 2 * pad) / 3;
+      const trayTop = Math.round(by + size + free * 0.24); // pièces près de la grille, à portée de pouce
+      for (let i = 0; i < 3; i++) slots.push({ x: safe.left + pad + i * slotW, y: trayTop, w: slotW, h: trayH });
+    } else {
+      const panel = clamp(Math.round(W * 0.26), 140, 300);
+      const availW = innerW - 2 * panel;
+      cell = Math.max(10, Math.floor(Math.min(availW - pad, innerH - 2 * pad) / n));
+      const size = cell * n;
+      bx = Math.round(safe.left + panel + (availW - size) / 2);
+      by = Math.round(safe.top + (innerH - size) / 2);
+      hud = { x: safe.left, y: safe.top, w: panel, h: innerH, extra: 0 };
+      const slotH = (innerH - 2 * pad) / 3;
+      for (let i = 0; i < 3; i++) slots.push({ x: W - safe.right - panel, y: safe.top + pad + i * slotH, w: panel, h: slotH });
+    }
+    slots.forEach((s) => {
+      s.cx = s.x + s.w / 2;
+      s.cy = s.y + s.h / 2;
+    });
+    const trayCell = Math.max(8, Math.floor(Math.min(cell * 0.62, (slots[0].w * 0.92) / 5, (slots[0].h * 0.9) / 5)));
+    return { W, H, n, mode: land ? 'landscape' : 'portrait', cell, board: { x: bx, y: by, size: cell * n }, margin: Math.round(cell * 0.2), slots, trayCell, hud, pad };
+  }
+
+  function createView(canvas, doc) {
+    doc = doc || root.document;
+    const ctx = canvas.getContext('2d');
+    const tiles = new Map();
+    const fx = { pops: [], clearing: [], sweeps: [], particles: [], shake: null };
+    let dpr = 1;
+    let L = null;
+    let boardBg = null;
+    let lastT = 0;
+    const view = { quality: 'high', reduced: false };
+
+    function makeTile(hex, px) {
+      const c = doc.createElement('canvas');
+      c.width = c.height = px;
+      const g = c.getContext('2d');
+      const gap = Math.max(1, Math.round(px * 0.045));
+      const s = px - gap * 2;
+      const r = s * 0.26;
+      const body = g.createLinearGradient(0, gap, 0, gap + s);
+      body.addColorStop(0, shade(hex, 0.3));
+      body.addColorStop(0.5, hex);
+      body.addColorStop(1, shade(hex, -0.26));
+      rrect(g, gap, gap, s, s, r);
+      g.fillStyle = body;
+      g.fill();
+      rrect(g, gap + 0.75, gap + 0.75, s - 1.5, s - 1.5, r);
+      g.lineWidth = Math.max(1, px * 0.045);
+      g.strokeStyle = 'rgba(255,255,255,0.3)';
+      g.stroke();
+      const hh = s * 0.4;
+      const gloss = g.createLinearGradient(0, gap + s * 0.06, 0, gap + s * 0.06 + hh);
+      gloss.addColorStop(0, 'rgba(255,255,255,0.55)');
+      gloss.addColorStop(1, 'rgba(255,255,255,0)');
+      rrect(g, gap + s * 0.1, gap + s * 0.06, s * 0.8, hh, r * 0.75);
+      g.fillStyle = gloss;
+      g.fill();
+      g.beginPath();
+      g.arc(gap + s * 0.25, gap + s * 0.23, s * 0.055, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(255,255,255,0.75)';
+      g.fill();
+      return c;
+    }
+    function sprite(color, basis) {
+      const px = Math.max(8, Math.round((basis === 'board' ? L.cell : L.trayCell) * dpr));
+      const key = color + ':' + px;
+      let t = tiles.get(key);
+      if (!t) {
+        t = makeTile(PALETTE[color], px);
+        tiles.set(key, t);
+      }
+      return t;
+    }
+    function buildBoardBg() {
+      const m = L.margin;
+      const S = L.board.size + 2 * m;
+      boardBg = doc.createElement('canvas');
+      boardBg.width = boardBg.height = Math.round(S * dpr);
+      const g = boardBg.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      rrect(g, 0.75, 0.75, S - 1.5, S - 1.5, L.cell * 0.5);
+      g.fillStyle = 'rgba(10,7,40,0.66)';
+      g.fill();
+      g.lineWidth = 1.5;
+      g.strokeStyle = 'rgba(255,255,255,0.13)';
+      g.stroke();
+      const gap = Math.max(1, Math.round(L.cell * 0.045));
+      g.fillStyle = 'rgba(255,255,255,0.075)';
+      for (let r = 0; r < L.n; r++)
+        for (let c = 0; c < L.n; c++) {
+          rrect(g, m + c * L.cell + gap, m + r * L.cell + gap, L.cell - 2 * gap, L.cell - 2 * gap, L.cell * 0.22);
+          g.fill();
+        }
+    }
+    function drawPiece(shape, x, y, cs, alpha, basis) {
+      const sp = sprite(shape.color, basis);
+      if (alpha !== 1) ctx.globalAlpha = alpha;
+      for (const p of shape.cells) ctx.drawImage(sp, x + p[1] * cs, y + p[0] * cs, cs, cs);
+      if (alpha !== 1) ctx.globalAlpha = 1;
+    }
+
+    /* ------------------------------------------------------------ Effets */
+    function burst(e) {
+      const cap = view.quality === 'low' || view.reduced ? 90 : 320;
+      const count = view.quality === 'low' || view.reduced ? 2 : 4;
+      const k = L.cell / 36;
+      const cx = L.board.x + (e.c + 0.5) * L.cell;
+      const cy = L.board.y + (e.r + 0.5) * L.cell;
+      for (let i = 0; i < count && fx.particles.length < cap; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = (90 + Math.random() * 260) * k;
+        fx.particles.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120 * k, t0: e.now, life: 520 + Math.random() * 280, size: (0.14 + Math.random() * 0.14) * L.cell, color: Math.random() < 0.5 ? shade(PALETTE[e.color], 0.35) : PALETTE[e.color] });
+      }
+    }
+    view.popCells = (cells, now) => cells.forEach((p) => fx.pops.push({ r: p[0], c: p[1], t0: now }));
+    view.clearCells = (cleared, rows, cols, origin, now) => {
+      const slow = view.reduced ? 0.4 : 1;
+      cleared.forEach((p) => {
+        const d = Math.hypot(p[0] - origin[0], p[1] - origin[1]);
+        fx.clearing.push({ r: p[0], c: p[1], color: p[2], t0: now, delay: Math.min(260, d * 26) * slow, dur: 340 * slow + 60, spawned: false, now: 0 });
+      });
+      if (!view.reduced) {
+        rows.forEach((r) => fx.sweeps.push({ kind: 'row', index: r, t0: now, dur: 380 }));
+        cols.forEach((c) => fx.sweeps.push({ kind: 'col', index: c, t0: now, dur: 380 }));
+      }
+    };
+    view.shake = (amp, dur, now) => {
+      if (!view.reduced && view.quality !== 'low') fx.shake = { t0: now, dur, amp };
+    };
+    view.busy = () => !!(fx.pops.length || fx.clearing.length || fx.sweeps.length || fx.particles.length || fx.shake);
+    view.reset = () => {
+      fx.pops = [];
+      fx.clearing = [];
+      fx.sweeps = [];
+      fx.particles = [];
+      fx.shake = null;
+    };
+    view.update = (now) => {
+      const dt = lastT ? Math.min(0.05, Math.max(0, (now - lastT) / 1000)) : 0.016;
+      lastT = now;
+      for (const e of fx.clearing)
+        if (!e.spawned && now >= e.t0 + e.delay) {
+          e.spawned = true;
+          e.now = now;
+          if (L) burst(e);
+        }
+      fx.clearing = fx.clearing.filter((e) => now < e.t0 + e.delay + e.dur);
+      fx.sweeps = fx.sweeps.filter((s) => now < s.t0 + s.dur);
+      fx.pops = fx.pops.filter((p) => now < p.t0 + 200);
+      const g = 1500 * (L ? L.cell / 36 : 1);
+      for (const p of fx.particles) {
+        p.vy += g * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
+      fx.particles = fx.particles.filter((p) => now < p.t0 + p.life);
+    };
+
+    /* --------------------------------------------------------- Géométrie */
+    view.resize = (W, H, ratio, n, safe, adv) => {
+      dpr = clamp(ratio || 1, 1, 2.5);
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      L = computeLayout(W, H, n, safe, adv);
+      tiles.clear();
+      buildBoardBg();
+      return L;
+    };
+    Object.defineProperty(view, 'layout', { get: () => L });
+    view.slotAt = (x, y) => {
+      if (!L) return -1;
+      let best = -1;
+      let bestD = Infinity;
+      L.slots.forEach((s, i) => {
+        const m = Math.round(Math.min(s.w, s.h) * 0.12);
+        if (x < s.x - m || x > s.x + s.w + m || y < s.y - m || y > s.y + s.h + m) return;
+        const d = Math.hypot(x - s.cx, y - s.cy);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      return best;
+    };
+
+    /* ------------------------------------------------------------ Dessin */
+    function strokeLine(kind, index, color, alpha) {
+      const { x, y, size } = L.board;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      if (kind === 'row') rrect(ctx, x - 2, y + index * L.cell - 2, size + 4, L.cell + 4, L.cell * 0.3);
+      else rrect(ctx, x + index * L.cell - 2, y - 2, L.cell + 4, size + 4, L.cell * 0.3);
+      ctx.stroke();
+    }
+    function drawGhost(drag, now) {
+      const { x, y } = L.board;
+      const gh = drag.ghost;
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      gh.rows.forEach((r) => {
+        ctx.fillRect(x, y + r * L.cell, L.board.size, L.cell);
+      });
+      gh.cols.forEach((c) => {
+        ctx.fillRect(x + c * L.cell, y, L.cell, L.board.size);
+      });
+      const pulse = 0.6 + 0.25 * Math.sin(now / 110);
+      gh.rows.forEach((r) => strokeLine('row', r, PALETTE[drag.shape.color], pulse));
+      gh.cols.forEach((c) => strokeLine('col', c, PALETTE[drag.shape.color], pulse));
+      ctx.globalAlpha = 0.42;
+      const sp = sprite(drag.shape.color, 'board');
+      for (const p of drag.shape.cells) ctx.drawImage(sp, x + (gh.c + p[1]) * L.cell, y + (gh.r + p[0]) * L.cell, L.cell, L.cell);
+      ctx.globalAlpha = 1;
+    }
+    view.render = (game, dyn, now) => {
+      if (!L) return;
+      const { x: bx, y: by, size } = L.board;
+      const cell = L.cell;
+      const n = L.n;
+      ctx.clearRect(0, 0, L.W, L.H);
+      ctx.save();
+      if (fx.shake) {
+        const p = (now - fx.shake.t0) / fx.shake.dur;
+        if (p >= 1) fx.shake = null;
+        else ctx.translate(Math.sin(now * 0.09) * fx.shake.amp * (1 - p), Math.cos(now * 0.11) * fx.shake.amp * (1 - p));
+      }
+      ctx.drawImage(boardBg, bx - L.margin, by - L.margin, size + 2 * L.margin, size + 2 * L.margin);
+      const drag = dyn && dyn.drag;
+      if (drag && drag.ghost && drag.ghost.valid) drawGhost(drag, now);
+
+      const pops = new Map();
+      fx.pops.forEach((p) => pops.set(p.r * n + p.c, p));
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          const v = game.grid[r * n + c];
+          if (!v) continue;
+          const pop = pops.get(r * n + c);
+          const k = pop ? 1 + 0.18 * Math.pow(1 - clamp((now - pop.t0) / 200, 0, 1), 2) : 1;
+          const d = (cell * (k - 1)) / 2;
+          ctx.drawImage(sprite(v, 'board'), bx + c * cell - d, by + r * cell - d, cell * k, cell * k);
+        }
+
+      for (const e of fx.clearing) {
+        const t = now - e.t0 - e.delay;
+        const x = bx + e.c * cell;
+        const y = by + e.r * cell;
+        if (t < 0) {
+          ctx.drawImage(sprite(e.color, 'board'), x, y, cell, cell);
+          continue;
+        }
+        const p = clamp(t / e.dur, 0, 1);
+        const k = p < 0.25 ? 1 + 0.14 * (p / 0.25) : 1.14 * (1 - (p - 0.25) / 0.75);
+        const d = (cell * (k - 1)) / 2;
+        const a = p < 0.5 ? 1 : 1 - (p - 0.5) / 0.5;
+        ctx.globalAlpha = a;
+        ctx.drawImage(sprite(e.color, 'board'), x - d, y - d, cell * k, cell * k);
+        ctx.globalAlpha = a * 0.85 * (p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7);
+        ctx.fillStyle = '#ffffff';
+        rrect(ctx, x - d + 1, y - d + 1, cell * k - 2, cell * k - 2, cell * 0.24);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      for (const s of fx.sweeps) {
+        const p = clamp((now - s.t0) / s.dur, 0, 1);
+        const len = cell * 3;
+        const pos = -len + p * (size + 2 * len);
+        ctx.save();
+        ctx.beginPath();
+        if (s.kind === 'row') ctx.rect(bx, by + s.index * cell, size, cell);
+        else ctx.rect(bx + s.index * cell, by, cell, size);
+        ctx.clip();
+        const g = s.kind === 'row' ? ctx.createLinearGradient(bx + pos, 0, bx + pos + len, 0) : ctx.createLinearGradient(0, by + pos, 0, by + pos + len);
+        g.addColorStop(0, 'rgba(255,255,255,0)');
+        g.addColorStop(0.5, 'rgba(255,255,255,0.7)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(bx, by, size, size);
+        ctx.restore();
+      }
+      for (const p of fx.particles) {
+        const a = 1 - (now - p.t0) / p.life;
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.fillStyle = p.color;
+        const s = p.size * (0.5 + 0.5 * a);
+        ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+
+      const tray = (dyn && dyn.tray) || [];
+      for (let i = 0; i < 3; i++) {
+        const shape = game.shapeAt(i);
+        const st = tray[i] || { scale: 1, alpha: 1, dy: 0 };
+        if (!shape || st.hidden || st.alpha <= 0) continue;
+        const tc = L.trayCell * st.scale;
+        const slot = L.slots[i];
+        drawPiece(shape, slot.cx - (shape.w * tc) / 2, slot.cy - (shape.h * tc) / 2 + st.dy, tc, st.alpha, 'tray');
+      }
+      for (const rt of (dyn && dyn.returning) || []) drawPiece(rt.shape, rt.x, rt.y, rt.cs, 1, 'board');
+      if (drag) {
+        ctx.fillStyle = 'rgba(0,0,0,0.26)';
+        for (const p of drag.shape.cells) {
+          rrect(ctx, drag.x + p[1] * drag.cs + 2, drag.y + p[0] * drag.cs + drag.cs * 0.2, drag.cs - 4, drag.cs - 4, drag.cs * 0.24);
+          ctx.fill();
+        }
+        drawPiece(drag.shape, drag.x, drag.y, drag.cs, 1, 'board');
+      }
+    };
+    return view;
+  }
+
+  PB.PALETTE = PALETTE;
+  PB.computeLayout = computeLayout;
+  PB.createView = createView;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { computeLayout, PALETTE };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== input.js ===== */
+/* Tessera Block — glisser-déposer (événements « pointer » : doigt, stylet et souris).
+ * Doigt/stylet : la pièce tenue s'affiche au-dessus du doigt. Souris : elle reste centrée sous le curseur.
+ * La case visée = la case la plus proche du coin haut-gauche de la pièce. */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const easeOut = (p) => 1 - Math.pow(1 - p, 3);
+  const easeOutBack = (p) => 1 + 2.4 * Math.pow(p - 1, 3) + 1.4 * Math.pow(p - 1, 2);
+  const LIFT_MS = 150;
+
+  /* o : { canvas, view, now(), getGame(), canAct(), onPick(i), onDrop(i, r, c) → booléen, onInvalid(i), wake() } */
+  function createInput(o) {
+    const view = o.view;
+    const canvas = o.canvas;
+    let drag = null;
+    let returning = [];
+    const enter = [null, null, null];
+
+    /* Distance entre le point touché et le bas de la pièce tenue (positive : la pièce est au-dessus du point).
+     * - Souris : la pièce reste centrée sous le curseur (rien à éviter, et toutes les cases restent atteignables).
+     * - Doigt/stylet : la pièce est au-dessus du doigt pour rester visible, mais jamais de plus que la place libre sous le plateau.
+     *   Sans cette limite, quand le plateau touche le bas de la fenêtre (écran large), le pointeur devrait sortir de l'écran
+     *   pour viser la dernière ligne : elle serait impossible à remplir. */
+    const liftOf = (kind, shape, L) => {
+      if (kind === 'mouse') return -(shape.h * L.cell) / 2;
+      const room = L.H - 6 - (L.board.y + L.board.size);
+      return clamp(room, 0, Math.max(54, L.cell * 1.7));
+    };
+
+    /* Case visée, calculée avec la géométrie finale (pièce à pleine taille) : l'aperçu ne tremble pas pendant la montée. */
+    function ghostFor(d) {
+      const L = view.layout;
+      const s = d.shape;
+      const tlx = d.px - (s.w * L.cell) / 2;
+      const tly = d.py - liftOf(d.kind, s, L) - s.h * L.cell;
+      const c = Math.round((tlx - L.board.x) / L.cell);
+      const r = Math.round((tly - L.board.y) / L.cell);
+      const pv = o.getGame().preview(d.index, r, c);
+      return { r, c, valid: pv.valid, rows: pv.rows, cols: pv.cols };
+    }
+    /* Position/taille dessinées : la pièce passe en douceur de son emplacement à la position « au-dessus du doigt ». */
+    function geometry(d, now) {
+      const L = view.layout;
+      const p = clamp((now - d.t0) / LIFT_MS, 0, 1);
+      const cs = L.trayCell + (L.cell - L.trayCell) * easeOutBack(p);
+      const slot = L.slots[d.index];
+      const e = easeOut(p);
+      const cx = slot.cx + (d.px - slot.cx) * e;
+      const cy = slot.cy + (d.py - liftOf(d.kind, d.shape, L) - (d.shape.h * cs) / 2 - slot.cy) * e;
+      return { x: cx - (d.shape.w * cs) / 2, y: cy - (d.shape.h * cs) / 2, cs };
+    }
+    const point = (e) => {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+
+    function release(cancelled) {
+      const d = drag;
+      const now = o.now();
+      const L = view.layout;
+      const geo = geometry(d, now);
+      const gh = ghostFor(d);
+      drag = null;
+      if (!cancelled && gh.valid && o.onDrop(d.index, gh.r, gh.c)) {
+        o.wake();
+        return;
+      }
+      const attempted = !cancelled && (L.mode === 'portrait' ? d.py < L.slots[0].y : d.px < L.slots[0].x);
+      if (attempted) o.onInvalid(d.index);
+      returning.push({ index: d.index, shape: d.shape, x0: geo.x, y0: geo.y, cs0: geo.cs, t0: now, dur: 190 });
+      o.wake();
+    }
+
+    function onDown(e) {
+      if (drag || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || !o.canAct() || !view.layout) return;
+      const p = point(e);
+      const i = view.slotAt(p.x, p.y);
+      const g = o.getGame();
+      if (i < 0 || !g || !g.tray[i]) return;
+      e.preventDefault();
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* capture impossible : on continue, les événements restent reçus tant que le doigt est sur le canvas */
+      }
+      returning = returning.filter((r) => r.index !== i);
+      drag = { id: e.pointerId, kind: e.pointerType === 'mouse' ? 'mouse' : 'touch', index: i, shape: g.shapeAt(i), px: p.x, py: p.y, t0: o.now(), ghost: null };
+      drag.ghost = ghostFor(drag);
+      o.onPick(i);
+      o.wake();
+    }
+    function onMove(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      e.preventDefault();
+      const p = point(e);
+      drag.px = p.x;
+      drag.py = p.y;
+      drag.ghost = ghostFor(drag);
+      o.wake();
+    }
+    function onUp(e) {
+      if (drag && e.pointerId === drag.id) release(false);
+    }
+    function onCancel(e) {
+      if (drag && e.pointerId === drag.id) release(true);
+    }
+    canvas.addEventListener('pointerdown', onDown, { passive: false });
+    canvas.addEventListener('pointermove', onMove, { passive: false });
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onCancel);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    return {
+      get dragging() {
+        return !!drag;
+      },
+      /* Décalage utilisé pour un type de pointeur ('mouse' ou 'touch') et une pièce : sert aux tests. */
+      lift(kind, shape) {
+        return liftOf(kind, shape, view.layout);
+      },
+      /* Ce que le rendu doit dessiner en plus de la grille. */
+      dyn(now) {
+        const L = view.layout;
+        const out = { drag: null, tray: [], returning: [] };
+        for (let i = 0; i < 3; i++) {
+          const st = { hidden: !!(drag && drag.index === i), scale: 1, alpha: 1, dy: 0 };
+          const en = enter[i];
+          if (en) {
+            const p = clamp((now - en.t0 - en.delay) / 320, 0, 1);
+            if (now - en.t0 >= en.delay + 320) enter[i] = null;
+            else {
+              st.scale = 0.4 + 0.6 * easeOutBack(p);
+              st.alpha = now < en.t0 + en.delay ? 0 : p;
+              st.dy = (1 - p) * 22;
+            }
+          }
+          out.tray.push(st);
+        }
+        returning = returning.filter((r) => now - r.t0 < r.dur);
+        for (const r of returning) {
+          const k = easeOut(clamp((now - r.t0) / r.dur, 0, 1));
+          const slot = L.slots[r.index];
+          const x1 = slot.cx - (r.shape.w * L.trayCell) / 2;
+          const y1 = slot.cy - (r.shape.h * L.trayCell) / 2;
+          out.returning.push({ shape: r.shape, x: r.x0 + (x1 - r.x0) * k, y: r.y0 + (y1 - r.y0) * k, cs: r.cs0 + (L.trayCell - r.cs0) * k });
+          out.tray[r.index].hidden = true;
+        }
+        if (drag) {
+          const geo = geometry(drag, now);
+          out.drag = { shape: drag.shape, x: geo.x, y: geo.y, cs: geo.cs, ghost: drag.ghost };
+        }
+        return out;
+      },
+      active(now) {
+        return !!drag || returning.length > 0 || enter.some((e) => e && now - e.t0 < e.delay + 320);
+      },
+      /* Nouvelles pièces : elles apparaissent l'une après l'autre. */
+      trayEnter(now) {
+        for (let i = 0; i < 3; i++) enter[i] = { t0: now, delay: i * 70 };
+      },
+      /* Interruption (pause, arrière-plan, fin de partie) : la pièce retourne à sa place. */
+      cancel() {
+        if (drag) release(true);
+      },
+      reset() {
+        drag = null;
+        returning = [];
+        enter.fill(null);
+      }
+    };
+  }
+
+  PB.createInput = createInput;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== ui.js ===== */
+/* Tessera Block — interface DOM : écrans, réglages, score, textes flottants. Les actions sortent par ui.on(nom, fn). */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+  const T = (key, params) => PB.i18n.t(key, params);
+
+  function createUI(doc) {
+    const $ = (id) => doc.getElementById(id);
+    const handlers = {};
+    const call = (name, arg) => {
+      if (handlers[name]) handlers[name](arg);
+    };
+    const el = {
+      app: $('app'), hud: $('hud'), score: $('scoreVal'), best: $('bestVal'), combo: $('comboPill'), fx: $('fxLayer'),
+      toast: $('toast'), probe: $('safeProbe'), homeBest: $('homeBest'), homeInfo: $('homeInfo'), btnPlay: $('btnPlay'),
+      btnNew: $('btnNew'), pauseScore: $('pauseScore'), overScore: $('overScore'), overBest: $('overBest'),
+      overRecord: $('overRecord'), overStats: $('overStats'), overReason: $('overReason'), segGrid: $('segGrid'), gridNote: $('gridNote'),
+      rowActions: $('rowActions'), setFooter: $('setFooter'), confirmText: $('confirmText'),
+      levelBox: $('levelBox'), levelNum: $('levelNum'), levelPts: $('levelPts'), levelBar: $('levelBar'), levelGoal: $('levelGoal'),
+      segMode: $('segMode'), homeLevel: $('homeLevel'), pauseLevel: $('pauseLevel'), restartLabel: $('restartLabel'),
+      againLabel: $('againLabel'), btnOverNew: $('btnOverNew'), levelTitle: $('levelTitle'), levelKind: $('levelKind'),
+      levelText: $('levelText'), levelDone: $('levelDone'), segLang: $('segLang')
+    };
+    const screens = { home: $('screenHome'), pause: $('screenPause'), over: $('screenOver'), settings: $('modalSettings'), confirm: $('modalConfirm'), level: $('screenLevel') };
+    const switches = { sound: $('swSound'), music: $('swMusic'), vibration: $('swVibration') };
+
+    const wire = {
+      btnPlay: 'play', btnNew: 'newGame', btnHomeSettings: 'openSettings', btnPause: 'pause', btnSettings: 'openSettings',
+      btnResume: 'resume', btnPauseRestart: 'restart', btnPauseHome: 'home', btnAgain: 'again', btnOverHome: 'home',
+      btnSettingsClose: 'closeSettings', btnSetHome: 'home', btnSetReplay: 'restart', btnConfirmYes: 'confirmYes', btnConfirmNo: 'confirmNo',
+      btnOverNew: 'newAdventure', btnLevelGo: 'levelGo'
+    };
+    Object.keys(wire).forEach((id) => {
+      $(id).addEventListener('click', () => {
+        if (PB.audio) PB.audio.play('click');
+        call(wire[id]);
+      });
+    });
+    Object.keys(switches).forEach((key) => {
+      switches[key].addEventListener('click', () => {
+        if (PB.audio) PB.audio.play('click');
+        call('set', { key, value: switches[key].getAttribute('aria-checked') !== 'true' });
+      });
+    });
+    el.segGrid.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-size]');
+      if (!b) return;
+      if (PB.audio) PB.audio.play('click');
+      call('set', { key: 'gridSize', value: Number(b.dataset.size) });
+    });
+    el.segMode.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-mode]');
+      if (!b) return;
+      if (PB.audio) PB.audio.play('click');
+      call('set', { key: 'mode', value: b.dataset.mode });
+    });
+    el.segLang.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-lang]');
+      if (!b) return;
+      if (PB.audio) PB.audio.play('click');
+      call('set', { key: 'lang', value: b.dataset.lang });
+    });
+    /* Un clic sur le fond sombre d'une fenêtre la ferme (réglages et confirmation). */
+    screens.settings.addEventListener('click', (e) => {
+      if (e.target === screens.settings) call('closeSettings');
+    });
+    screens.confirm.addEventListener('click', (e) => {
+      if (e.target === screens.confirm) call('confirmNo');
+    });
+
+    function show(name) {
+      const s = screens[name];
+      s.classList.add('show');
+      s.setAttribute('aria-hidden', 'false');
+      try {
+        s.inert = false;
+      } catch (err) {
+        /* ancien moteur sans « inert » : visibility:hidden suffit */
+      }
+    }
+    function hide(name) {
+      const s = screens[name];
+      s.classList.remove('show');
+      s.setAttribute('aria-hidden', 'true');
+      try {
+        s.inert = true;
+      } catch (err) {
+        /* idem */
+      }
+    }
+    Object.keys(screens).forEach((n) => (n === 'home' ? show(n) : hide(n)));
+
+    let shown = null;
+    function setScore(n) {
+      if (n === shown) return;
+      shown = n;
+      el.score.textContent = String(n);
+    }
+    function bumpScore() {
+      el.score.classList.remove('bump');
+      void el.score.offsetWidth; // relance l'animation CSS
+      el.score.classList.add('bump');
+    }
+    function setCombo(n) {
+      if (n >= 2) {
+        el.combo.textContent = T('combo', { n });
+        el.combo.classList.add('on');
+      } else el.combo.classList.remove('on');
+    }
+
+    let bannerEl = null;
+    function banner(main, sub, cls) {
+      if (bannerEl) bannerEl.remove();
+      const b = doc.createElement('div');
+      b.className = 'fx-banner ' + (cls || '');
+      const m = doc.createElement('b');
+      m.textContent = main;
+      b.appendChild(m);
+      if (sub) {
+        const s = doc.createElement('i');
+        s.textContent = sub;
+        b.appendChild(s);
+      }
+      el.fx.appendChild(b);
+      bannerEl = b;
+      const kill = () => {
+        if (b.parentNode) b.remove();
+        if (bannerEl === b) bannerEl = null;
+      };
+      b.addEventListener('animationend', kill);
+      setTimeout(kill, 1700);
+    }
+    function floatText(text, x, y, cls) {
+      while (el.fx.querySelectorAll('.fx-float').length >= 8) el.fx.querySelector('.fx-float').remove();
+      const f = doc.createElement('div');
+      f.className = 'fx-float ' + (cls || '');
+      f.textContent = text;
+      f.style.left = Math.round(x) + 'px';
+      f.style.top = Math.round(y) + 'px';
+      el.fx.appendChild(f);
+      const kill = () => {
+        if (f.parentNode) f.remove();
+      };
+      f.addEventListener('animationend', kill);
+      setTimeout(kill, 1500);
+    }
+    let toastTimer = 0;
+    function toast(msg) {
+      el.toast.textContent = msg;
+      el.toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.toast.classList.remove('show'), 2400);
+    }
+
+    let countRaf = 0;
+    function countUp(node, to, ms) {
+      root.cancelAnimationFrame(countRaf);
+      const t0 = root.performance.now();
+      const step = (now) => {
+        const p = Math.min(1, (now - t0) / ms);
+        node.textContent = String(Math.round(to * (1 - Math.pow(1 - p, 3))));
+        if (p < 1) countRaf = root.requestAnimationFrame(step);
+      };
+      node.textContent = '0';
+      countRaf = root.requestAnimationFrame(step);
+      setTimeout(() => (node.textContent = String(to)), ms + 120); // filet de sécurité si l'onglet est en arrière-plan
+    }
+
+    return {
+      el,
+      handlers,
+      on(name, fn) {
+        handlers[name] = fn;
+      },
+      show,
+      hide,
+      isOpen: (name) => screens[name].classList.contains('show'),
+      setPhase(phase) {
+        el.app.dataset.phase = phase;
+      },
+      setScore,
+      bumpScore,
+      setCombo,
+      setBest(n) {
+        el.best.textContent = String(n);
+      },
+      banner,
+      floatText,
+      toast,
+      applyLayout(L) {
+        const h = L.hud;
+        const s = el.hud.style;
+        s.left = h.x + 'px';
+        s.top = h.y + 'px';
+        s.width = h.w + 'px';
+        s.height = h.h + 'px';
+        el.app.classList.toggle('land', L.mode === 'landscape');
+        const r = doc.documentElement.style;
+        r.setProperty('--u', Math.min(L.W, L.H) / 100 + 'px');
+        r.setProperty('--hud-h', h.h - (h.extra || 0) + 'px');
+        r.setProperty('--banner-y', Math.round(L.board.y + L.board.size * 0.34) + 'px');
+      },
+      readSafe() {
+        const cs = root.getComputedStyle(el.probe);
+        const px = (v) => parseFloat(v) || 0;
+        return { top: px(cs.paddingTop), right: px(cs.paddingRight), bottom: px(cs.paddingBottom), left: px(cs.paddingLeft) };
+      },
+      /* d : { best, saved (partie en cours ou non), info, levelLine, mode, newLabel } */
+      renderHome(d) {
+        el.homeBest.textContent = String(d.best);
+        el.btnPlay.querySelector('span').textContent = T(d.saved ? 'continue' : 'play');
+        el.btnNew.hidden = !d.saved;
+        el.btnNew.textContent = T(d.mode === 'adventure' ? 'newAdventure' : 'newGame');
+        el.homeInfo.textContent = d.info || '';
+        el.homeInfo.hidden = !d.info;
+        el.homeLevel.textContent = d.levelLine || '';
+        el.homeLevel.hidden = !d.levelLine;
+        el.segMode.querySelectorAll('button[data-mode]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === d.mode ? 'true' : 'false'));
+      },
+      /* Langue affichée comme sélectionnée dans le sélecteur de l'accueil. */
+      renderLang(code) {
+        el.segLang.querySelectorAll('button[data-lang]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.lang === code ? 'true' : 'false'));
+      },
+      /* d : { score, level (0 en mode Classique), points } */
+      renderPause(d) {
+        el.pauseScore.textContent = String(d.score);
+        el.pauseLevel.textContent = d.level ? T('info.pause', { n: d.level, points: d.points }) : '';
+        el.pauseLevel.hidden = !d.level;
+        el.restartLabel.textContent = T(d.level ? 'restartLevel' : 'restart');
+      },
+      /* d : { level, ratio, points, goal } ou null (mode classique : barre masquée) */
+      setLevel(d) {
+        el.levelBox.hidden = !d;
+        if (!d) return;
+        el.levelNum.textContent = T('hud.level', { n: d.level });
+        el.levelPts.textContent = d.points;
+        el.levelBar.style.setProperty('--p', String(d.ratio));
+        el.levelGoal.textContent = d.goal || '';
+        el.levelGoal.hidden = !d.goal;
+      },
+      /* d : { level, title, kind (false pour un niveau sans défi), text, done } */
+      renderLevel(d) {
+        el.levelTitle.textContent = T('levelTitle', { n: d.level });
+        el.levelDone.hidden = !d.done;
+        el.levelKind.hidden = !d.kind;
+        el.levelKind.textContent = d.kind ? T('challenge', { title: d.title }) : '';
+        el.levelText.textContent = d.text;
+      },
+      renderOver(d) {
+        countUp(el.overScore, d.score, 800);
+        el.overBest.textContent = String(d.best);
+        el.overReason.textContent = d.reason || '';
+        el.overReason.hidden = !d.reason;
+        el.overRecord.hidden = !d.record;
+        const parts = [];
+        if (d.level) parts.push(d.bestLevel > d.level ? T('stats.levelBest', { n: d.level, best: d.bestLevel }) : T('stats.level', { n: d.level }));
+        parts.push(T('stats.lines', { n: d.lines }), T('stats.moves', { n: d.moves }));
+        if (!d.level) parts.push(T('stats.grid', { size: d.size }));
+        el.overStats.textContent = parts.join(' · ');
+        el.againLabel.textContent = d.level ? T('againLevel', { n: d.level }) : T('again');
+        el.btnOverNew.hidden = !d.level;
+      },
+      renderSettings(s, ctx) {
+        Object.keys(switches).forEach((k) => switches[k].setAttribute('aria-checked', s[k] ? 'true' : 'false'));
+        el.segGrid.querySelectorAll('button[data-size]').forEach((b) => b.setAttribute('aria-pressed', Number(b.dataset.size) === s.gridSize ? 'true' : 'false'));
+        el.rowActions.hidden = !ctx.inGame;
+        el.gridNote.textContent = T(ctx.inGame ? 'gridNote.game' : 'gridNote.home');
+        el.setFooter.textContent = T('footer', { v: ctx.version, storage: T(ctx.persistent ? 'storage.on' : 'storage.off') });
+      },
+      askConfirm(text) {
+        el.confirmText.textContent = text;
+        show('confirm');
+      }
+    };
+  }
+
+  PB.createUI = createUI;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== game.js ===== */
+/* Tessera Block — contrôleur : cycle de partie, effets, score animé, sauvegarde automatique, interruptions. */
+(function (root) {
+  'use strict';
+  const PB = (root.PB = root.PB || {});
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const easeOut = (p) => 1 - Math.pow(1 - p, 3);
+  const T = (key, params) => PB.i18n.t(key, params);
+  const praise = (n) => T('praise.' + clamp(n, 2, 5));
+
+  function createApp(win) {
+    const doc = win.document;
+    const E = PB.engine;
+    const Levels = PB.levels;
+    const CFG = PB.CONFIG;
+    const audio = PB.audio;
+    const haptics = PB.haptics;
+    const storage = PB.storage;
+    const canvas = doc.getElementById('cv');
+    const view = PB.createView(canvas, doc);
+    const ui = PB.createUI(doc);
+    const now = () => win.performance.now();
+    view.reduced = !!(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+    const app = {
+      settings: storage.loadSettings(), best: storage.loadBest(), bestAdv: storage.loadBestAdv(), game: null, phase: 'home', paused: false,
+      startBest: 0, startBestLevel: 0, recordBeaten: false, locked: false, levelTimer: 0, retryState: null, shown: 0, scoreFrom: 0, scoreTo: 0, scoreT0: null,
+      overTimer: 0, pendingConfirm: null, seedCount: 0, stats: { frames: 0, slow: 0 },
+      bonusUsed: false, levelCardDone: false, lastEntry: null, overData: null
+    };
+    const modalOpen = () => ui.isOpen('settings') || ui.isOpen('confirm') || ui.isOpen('level');
+    const persistNow = () => {
+      if (app.phase === 'playing' && app.game && !app.game.over) storage.saveGame(app.game.serialize());
+    };
+
+    function newSeed() {
+      const q = new win.URLSearchParams(win.location.search).get('seed');
+      if (q !== null && /^\d+$/.test(q)) return (Number(q) + app.seedCount++) >>> 0; // graine imposée (tests reproductibles)
+      try {
+        const a = new Uint32Array(1);
+        win.crypto.getRandomValues(a);
+        return a[0];
+      } catch (err) {
+        return (Math.random() * 4294967296) >>> 0;
+      }
+    }
+
+    /* ------------------------------------------------------- Boucle d'affichage */
+    let raf = 0;
+    let last = 0;
+    const needsFrame = (t) => view.busy() || input.active(t) || app.scoreT0 !== null;
+    function request() {
+      if (!raf && !doc.hidden && app.phase !== 'home') raf = win.requestAnimationFrame(frame);
+    }
+    function frame(t) {
+      raf = 0;
+      if (last && view.busy()) {
+        const dt = t - last;
+        app.stats.frames++;
+        if (dt > 34 && dt < 250) app.stats.slow++;
+        else if (dt <= 20 && app.stats.slow > 0) app.stats.slow--;
+        if (app.stats.slow > 25) view.quality = 'low'; // appareil modeste : moins de particules, pas de secousse
+      }
+      last = t;
+      view.update(t);
+      if (app.scoreT0 !== null) {
+        const p = clamp((t - app.scoreT0) / 450, 0, 1);
+        app.shown = Math.round(app.scoreFrom + (app.scoreTo - app.scoreFrom) * easeOut(p));
+        ui.setScore(app.shown);
+        if (p >= 1) app.scoreT0 = null;
+      }
+      if (app.game) view.render(app.game, input.dyn(t), t);
+      if (needsFrame(t)) request();
+      else last = 0; // inactif : plus aucune image demandée, la batterie respire
+    }
+
+    /* -------------------------------------------------------------- Géométrie */
+    function relayout() {
+      const n = app.game ? app.game.size : app.settings.gridSize;
+      const adv = !!(app.game && app.game.adv && app.phase !== 'home');
+      const L = view.resize(win.innerWidth, win.innerHeight, win.devicePixelRatio, n, ui.readSafe(), adv);
+      ui.applyLayout(L);
+      if (app.game && app.phase !== 'home') view.render(app.game, input.dyn(now()), now());
+      request();
+    }
+    let relayoutQueued = false;
+    function scheduleRelayout() {
+      if (relayoutQueued) return;
+      relayoutQueued = true;
+      win.requestAnimationFrame(() => {
+        relayoutQueued = false;
+        relayout();
+      });
+    }
+
+    /* ------------------------------------------------------------------ Coups */
+    const specOf = (g) => Levels.levelSpec(g.adv.level);
+    /* Enregistre score total et niveau atteint du mode Aventure (jamais abaissés) et rafraîchit l'affichage. */
+    function saveAdvBest() {
+      const g = app.game;
+      storage.saveBestAdv(g.score, g.adv.level);
+      app.bestAdv = storage.loadBestAdv();
+      ui.setBest(app.bestAdv.score);
+    }
+    function refreshLevelHud() {
+      const g = app.game;
+      if (!g || !g.adv) {
+        ui.setLevel(null);
+        return;
+      }
+      const st = Levels.status(g.adv, specOf(g));
+      ui.setLevel({ level: g.adv.level, ratio: st.ratio, points: st.points, goal: st.goal });
+    }
+    function updateBest() {
+      const g = app.game;
+      if (g.score <= (g.adv ? app.bestAdv.score : app.best[g.size])) return;
+      if (g.adv) saveAdvBest();
+      else {
+        app.best[g.size] = g.score;
+        storage.saveBest(g.size, g.score); // sauvegarde immédiate du record
+        ui.setBest(g.score);
+      }
+      if (!app.recordBeaten && app.startBest > 0) {
+        ui.toast(T('newRecord'));
+        audio.play('record');
+      }
+      app.recordBeaten = true;
+    }
+    function onDrop(i, r, c) {
+      const g = app.game;
+      const t = now();
+      const res = g.place(i, r, c);
+      if (!res.ok) return false;
+      const shape = E.SHAPE_BY_ID[res.shapeId];
+      const L = view.layout;
+      view.popCells(res.placed, t);
+      audio.play('drop');
+      haptics.vibrate(haptics.patterns.drop);
+      if (res.lines > 0) {
+        view.clearCells(res.cleared, res.rows, res.cols, [r + (shape.h - 1) / 2, c + (shape.w - 1) / 2], t);
+        if (res.lines >= 2 || res.perfect) view.shake(Math.min(10, 3 + res.lines * 2), 320, t);
+        audio.play('clear', { lines: res.lines, combo: res.combo });
+        if (res.combo >= 2) audio.play('combo', { combo: res.combo });
+        haptics.vibrate(res.combo >= 2 ? haptics.patterns.combo : haptics.patterns.clear);
+        const fx = clamp(L.board.x + (c + shape.w / 2) * L.cell, L.board.x + 24, L.board.x + L.board.size - 24);
+        ui.floatText('+' + res.points.total, fx, L.board.y + (r + shape.h / 2) * L.cell, res.lines >= 2 ? 'big' : '');
+        if (res.perfect) {
+          ui.banner(T('perfect'), '+' + CFG.score.perfectClear, 'perfect');
+          audio.play('perfect');
+        } else if (res.combo >= 2) ui.banner(T('combo', { n: res.combo }), res.lines >= 2 ? praise(res.lines) : '', 'combo');
+        else if (res.lines >= 2) ui.banner(praise(res.lines), '', 'praise');
+      }
+      app.scoreFrom = app.shown;
+      app.scoreTo = g.score;
+      app.scoreT0 = t;
+      ui.bumpScore();
+      ui.setCombo(g.combo);
+      updateBest();
+      const ev = g.adv ? Levels.afterMove(g, res) : 'none'; // 'level' | 'failed' | 'none'
+      refreshLevelHud();
+      if (res.refilled) input.trayEnter(t);
+      if (ev === 'level') levelComplete();
+      else if (ev === 'failed') endGame('limit');
+      else if (res.over) endGame('stuck');
+      else storage.saveGame(g.serialize());
+      PB.events.emit('game:move', res);
+      request();
+      return true;
+    }
+
+    /* Explique pourquoi la partie s'arrête (la grille n'est pas forcément pleine). */
+    function overReason(g) {
+      let free = 0;
+      for (let i = 0; i < g.grid.length; i++) if (!g.grid[i]) free++;
+      if (free === 0) return T('over.full');
+      return T('over.stuck', { rest: free > 1 ? T('over.restN', { n: free }) : T('over.rest1') });
+    }
+    /* ------------------------------------------------------------ Niveaux (Aventure) */
+    function showLevelCard(spec, done) {
+      app.levelCardDone = !!done;
+      app.bonusUsed = false;
+      ui.renderLevel({ level: spec.level, title: spec.title, kind: spec.kind !== 'points', text: spec.text, done });
+      ui.show('level');
+    }
+    /* Niveau réussi : la dernière animation se termine, puis le plateau du niveau suivant est installé. */
+    function levelComplete() {
+      const g = app.game;
+      app.locked = true;
+      input.cancel();
+      storage.saveGame(g.serialize()); // état « objectif atteint » : à la reprise, le passage de niveau est refait
+      audio.play('record');
+      haptics.vibrate(haptics.patterns.combo);
+      ui.banner(T('levelBanner', { n: g.adv.level }), '', 'perfect');
+      PB.events.emit('game:levelup', { level: g.adv.level, score: g.score });
+      win.clearTimeout(app.levelTimer);
+      app.levelTimer = win.setTimeout(advanceLevel, 900);
+    }
+    function advanceLevel() {
+      win.clearTimeout(app.levelTimer);
+      const g = app.game;
+      app.locked = false;
+      if (!g || !g.adv || app.phase !== 'playing') return;
+      const spec = Levels.nextLevel(g);
+      view.reset();
+      input.reset();
+      ui.setCombo(0);
+      if (g.adv.level > app.bestAdv.level) saveAdvBest();
+      refreshLevelHud();
+      input.trayEnter(now());
+      storage.saveGame(g.serialize());
+      showLevelCard(spec, true);
+      request();
+    }
+    /* Début du niveau en cours, pour « rejouer le niveau » : plateau neuf, score total d'avant le niveau. */
+    function levelRetryState(g) {
+      const ng = new E.Game({ size: g.size, seed: newSeed() });
+      Levels.startLevel(ng, g.adv.level);
+      ng.score = Math.max(0, g.score - g.adv.score);
+      ng.moves = Math.max(0, g.moves - g.adv.moves);
+      ng.linesCleared = Math.max(0, g.linesCleared - g.adv.lines);
+      ng.bestCombo = g.bestCombo;
+      return ng.serialize();
+    }
+    function cancelOver() {
+      win.clearTimeout(app.overTimer);
+      ui.hide('over');
+    }
+    function endGame(why) {
+      const g = app.game;
+      app.phase = 'over';
+      app.locked = false;
+      const adv = !!g.adv;
+      if (adv) {
+        // Aventure : « Continuer » reprendra au début du niveau échoué, la progression n'est pas perdue.
+        app.retryState = levelRetryState(g);
+        storage.saveGame(app.retryState);
+      } else storage.clearGame();
+      const entry = { score: g.score, size: g.size, lines: g.linesCleared, moves: g.moves, date: new Date().toISOString() };
+      if (adv) {
+        entry.mode = 'adventure';
+        entry.level = g.adv.level;
+      }
+      storage.addHistory(entry);
+      app.lastEntry = entry;
+      app.bonusUsed = false;
+      ui.setCombo(0);
+      app.overTimer = win.setTimeout(() => {
+        app.pendingConfirm = null;
+        ui.hide('settings'); // une fenêtre ouverte pendant le délai ne doit pas rester sous l'écran de fin
+        ui.hide('confirm');
+        audio.play('gameover');
+        haptics.vibrate(haptics.patterns.over);
+        const levelRecord = adv && app.startBestLevel > 0 && g.adv.level > app.startBestLevel;
+        app.overData = {
+          score: g.score, best: adv ? app.bestAdv.score : app.best[g.size], record: app.recordBeaten || levelRecord,
+          lines: g.linesCleared, moves: g.moves, size: g.size,
+          reason: adv && why === 'limit' ? Levels.status(g.adv, specOf(g)).reason : overReason(g),
+          level: adv ? g.adv.level : 0, bestLevel: app.bestAdv.level
+        };
+        ui.renderOver(app.overData);
+        ui.show('over');
+      }, 650);
+      PB.events.emit('game:over', entry);
+    }
+
+    /* ------------------------------------------------------------ Bonus « pub regardée en entier » : +40 points au score */
+    const BONUS_POINTS = 40;
+    /* Possible une seule fois par écran « Partie terminée » ou « Niveau réussi ». */
+    function bonusAvailable() {
+      const g = app.game;
+      if (!g || app.bonusUsed) return false;
+      if (app.phase === 'over') return ui.isOpen('over');
+      return !!g.adv && app.levelCardDone && ui.isOpen('level');
+    }
+    /* Ajoute les points au score réel de la partie : records, historique et reprise d'Aventure restent cohérents. */
+    function grantBonus() {
+      if (!bonusAvailable()) return null;
+      const g = app.game;
+      const wasOver = app.phase === 'over';
+      app.bonusUsed = true;
+      g.score = Math.min(g.score + BONUS_POINTS, 1e9);
+      if (wasOver) {
+        updateBest();
+        if (g.adv && app.retryState) { // « Continuer » reprend au début du niveau échoué : le bonus est conservé
+          app.retryState.score = Math.min(app.retryState.score + BONUS_POINTS, 1e9);
+          storage.saveGame(app.retryState);
+        }
+        if (app.lastEntry) { // l'historique garde le score final, bonus compris
+          const old = app.lastEntry;
+          const list = storage.loadHistory();
+          const i = list.findIndex((e) => e.date === old.date && e.score === old.score && e.size === old.size);
+          if (i >= 0) {
+            list.splice(i, 1);
+            storage.write('history', list);
+          }
+          app.lastEntry = Object.assign({}, old, { score: g.score });
+          storage.addHistory(app.lastEntry);
+        }
+        if (app.overData) {
+          app.overData = Object.assign({}, app.overData, {
+            score: g.score, best: g.adv ? app.bestAdv.score : app.best[g.size], record: app.overData.record || app.recordBeaten
+          });
+          ui.renderOver(app.overData);
+        }
+      } else {
+        app.scoreFrom = app.shown;
+        app.scoreTo = g.score;
+        app.scoreT0 = now();
+        ui.bumpScore();
+        updateBest();
+        storage.saveGame(g.serialize());
+        request();
+      }
+      audio.play('record');
+      haptics.vibrate(haptics.patterns.clear);
+      PB.events.emit('game:bonus', { points: BONUS_POINTS, score: g.score });
+      return g.score;
+    }
+    PB.bonus = { POINTS: BONUS_POINTS, available: bonusAvailable, grant: grantBonus };
+
+    /* ------------------------------------------------------------ Cycle de vie */
+    function startGame(state, mode) {
+      cancelOver();
+      win.clearTimeout(app.levelTimer);
+      app.locked = false;
+      let game = null;
+      if (state) {
+        try {
+          game = E.Game.fromState(state);
+        } catch (err) {
+          ui.toast(T('toast.lostNew'));
+          storage.clearGame(state && state.adv ? 'adventure' : 'classic');
+        }
+      }
+      mode = game ? (game.adv ? 'adventure' : 'classic') : mode || (state && state.adv ? 'adventure' : app.settings.mode);
+      const fresh = !game;
+      if (!game) {
+        game = new E.Game({ size: mode === 'adventure' ? 10 : app.settings.gridSize, seed: newSeed() });
+        if (mode === 'adventure') Levels.startLevel(game, 1); // nouvelle aventure : niveau 1
+      }
+      // Reprise d'une partie enregistrée au moment d'un passage de niveau : on termine la transition.
+      let card = null;
+      if (game.adv) {
+        const spec = specOf(game);
+        if (Levels.status(game.adv, spec).done) card = { spec: Levels.nextLevel(game), done: true };
+        else if (fresh) card = { spec, done: false };
+      }
+      app.game = game;
+      view.reset();
+      input.reset();
+      const size = game.size;
+      const adv = !!game.adv;
+      app.startBest = adv ? app.bestAdv.score : app.best[size];
+      app.startBestLevel = app.bestAdv.level;
+      app.recordBeaten = !!state && game.score > 0 && game.score >= app.startBest;
+      app.phase = 'playing';
+      app.paused = false;
+      ['home', 'pause', 'over', 'settings', 'confirm', 'level'].forEach((n) => ui.hide(n));
+      ui.setPhase('play');
+      if (adv && game.adv.level > app.bestAdv.level) saveAdvBest();
+      relayout();
+      ui.setBest(adv ? app.bestAdv.score : app.best[size]);
+      refreshLevelHud();
+      app.shown = game.score;
+      app.scoreT0 = null;
+      ui.setScore(game.score);
+      ui.setCombo(game.combo);
+      input.trayEnter(now());
+      PB.events.emit('game:start', { size, resumed: !!state, mode });
+      if (game.over) {
+        endGame('stuck');
+        return;
+      }
+      storage.saveGame(game.serialize());
+      if (card) showLevelCard(card.spec, card.done);
+      request();
+    }
+    function showHome() {
+      cancelOver();
+      win.clearTimeout(app.levelTimer);
+      app.locked = false;
+      input.cancel();
+      app.phase = 'home';
+      app.paused = false;
+      ['pause', 'over', 'settings', 'confirm', 'level'].forEach((n) => ui.hide(n));
+      ui.setPhase('home');
+      renderHomeInfo();
+      ui.show('home');
+    }
+    /* Contenu de l'accueil (meilleur score, reprise, niveau) selon le mode choisi ; sans toucher aux fenêtres ouvertes. */
+    function renderHomeInfo() {
+      const mode = app.settings.mode;
+      const saved = storage.loadGame(mode).state;
+      let info = '';
+      let levelLine = '';
+      let best = app.best[app.settings.gridSize];
+      if (mode === 'adventure') {
+        best = app.bestAdv.score;
+        if (saved) info = T('info.adventure', { n: saved.adv.level, score: saved.adv.score, target: Levels.TARGET });
+        if (app.bestAdv.level) levelLine = T('bestLevel', { n: app.bestAdv.level });
+      } else if (saved) info = T('info.classic', { score: saved.score, size: saved.size });
+      ui.renderHome({ best, saved: !!saved, info, levelLine, mode });
+    }
+    function pause() {
+      if (app.phase !== 'playing' || app.paused || app.locked || !app.game || app.game.over) return;
+      input.cancel();
+      app.paused = true;
+      const ga = app.game.adv;
+      ui.renderPause({ score: app.game.score, level: ga ? ga.level : 0, points: ga ? Levels.status(ga, specOf(app.game)).points : '' });
+      ui.show('pause');
+      persistNow();
+    }
+    function resume() {
+      if (!app.paused) return;
+      app.paused = false;
+      ui.hide('pause');
+      request();
+    }
+    function ask(text, yes) {
+      app.pendingConfirm = yes;
+      ui.askConfirm(text);
+    }
+    function restart() {
+      const g = app.game;
+      const adv = !!(g && g.adv);
+      const go = () => {
+        ui.hide('settings');
+        ui.hide('pause');
+        if (adv) startGame(levelRetryState(g)); // Aventure : on rejoue seulement le niveau en cours
+        else startGame();
+      };
+      const progress = adv ? g.adv.score > 0 : g && g.score > 0;
+      if (app.phase === 'playing' && g && !g.over && progress)
+        ask(T(adv ? 'ask.restartLevel' : 'ask.restart'), go);
+      else go();
+    }
+    function renderSettings() {
+      ui.renderSettings(app.settings, { inGame: app.phase === 'playing', version: CFG.version, persistent: storage.persistent });
+    }
+    function applySettings() {
+      audio.configure(app.settings);
+      haptics.enabled = app.settings.vibration;
+    }
+    /* Après un changement de langue : texte fixe de la page, puis ce qui est déjà affiché. */
+    function relocalize() {
+      PB.i18n.applyDom(doc);
+      ui.renderLang(PB.i18n.lang);
+      if (app.phase === 'home') renderHomeInfo();
+      if (app.game && app.game.adv) refreshLevelHud();
+    }
+    function onSet(d) {
+      const s = app.settings;
+      if (d.key === 'mode') {
+        if (d.value !== 'classic' && d.value !== 'adventure') return;
+        s.mode = d.value;
+      } else if (d.key === 'gridSize') {
+        if (CFG.gridSizes.indexOf(d.value) < 0) return;
+        s.gridSize = d.value;
+      } else if (d.key === 'lang') {
+        if (!PB.i18n.isLang(d.value)) return;
+        s.lang = PB.i18n.setLang(d.value);
+        relocalize();
+      } else if (d.key in s) s[d.key] = !!d.value;
+      else return;
+      storage.saveSettings(s);
+      if (d.key === 'sound') audio.setSound(s.sound);
+      if (d.key === 'music') {
+        audio.unlock();
+        audio.setMusic(s.music);
+      }
+      if (d.key === 'vibration') haptics.enabled = s.vibration;
+      if ((d.key === 'gridSize' || d.key === 'mode') && app.phase === 'home') renderHomeInfo(); // la fenêtre des réglages reste ouverte
+      renderSettings();
+    }
+
+    /* ------------------------------------------------------------------ Liens UI */
+    ui.on('play', () => {
+      const mode = app.settings.mode;
+      const r = storage.loadGame(mode);
+      startGame(r.state || undefined, mode);
+    });
+    ui.on('newGame', () => {
+      const mode = app.settings.mode;
+      ask(T(mode === 'adventure' ? 'ask.newAdventure' : 'ask.newGame'), () => {
+        if (mode === 'adventure') storage.clearGame('adventure');
+        startGame(undefined, mode);
+      });
+    });
+    ui.on('again', () => {
+      if (app.game && app.game.adv && app.retryState) startGame(app.retryState); // Aventure : on rejoue le niveau échoué
+      else startGame(undefined, app.game && app.game.adv ? 'adventure' : 'classic');
+    });
+    ui.on('newAdventure', () => {
+      const lvl = app.game && app.game.adv ? app.game.adv.level : 1;
+      ask(T('ask.fromLevel1', { n: lvl }), () => {
+        storage.clearGame('adventure');
+        app.retryState = null;
+        startGame(undefined, 'adventure');
+      });
+    });
+    ui.on('levelGo', () => {
+      ui.hide('level');
+      request();
+    });
+    ui.on('pause', pause);
+    ui.on('resume', resume);
+    ui.on('restart', restart);
+    ui.on('home', () => {
+      ui.hide('settings');
+      persistNow();
+      showHome();
+    });
+    ui.on('openSettings', () => {
+      input.cancel();
+      renderSettings();
+      ui.show('settings');
+    });
+    ui.on('closeSettings', () => {
+      ui.hide('settings');
+      request();
+    });
+    ui.on('confirmYes', () => {
+      const f = app.pendingConfirm;
+      app.pendingConfirm = null;
+      ui.hide('confirm');
+      if (f) f();
+    });
+    ui.on('confirmNo', () => {
+      app.pendingConfirm = null;
+      ui.hide('confirm');
+    });
+    ui.on('set', onSet);
+
+    const input = PB.createInput({
+      canvas,
+      view,
+      now,
+      getGame: () => app.game,
+      canAct: () => app.phase === 'playing' && !app.paused && !app.locked && !modalOpen() && !!app.game && !app.game.over,
+      onPick: () => {
+        audio.play('pick');
+        haptics.vibrate(haptics.patterns.pick);
+      },
+      onDrop,
+      onInvalid: () => audio.play('invalid'),
+      wake: request
+    });
+
+    /* ------------------------------------------------- Interruptions et fermeture */
+    doc.addEventListener('visibilitychange', () => {
+      if (doc.hidden) {
+        input.cancel();
+        if (app.phase === 'playing' && !app.paused && !modalOpen()) pause();
+        persistNow();
+        audio.suspend();
+      } else {
+        audio.resume();
+        request();
+      }
+    });
+    win.addEventListener('pagehide', persistNow);
+    win.addEventListener('resize', scheduleRelayout);
+    win.addEventListener('orientationchange', scheduleRelayout);
+    if (win.visualViewport) win.visualViewport.addEventListener('resize', scheduleRelayout);
+    const unlock = () => audio.unlock();
+    doc.addEventListener('pointerdown', unlock, true);
+    doc.addEventListener('keydown', unlock, true);
+    doc.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (ui.isOpen('confirm')) ui.handlers.confirmNo();
+      else if (ui.isOpen('settings')) ui.handlers.closeSettings();
+      else if (ui.isOpen('level')) ui.handlers.levelGo();
+      else if (app.paused) resume();
+      else pause();
+    });
+
+    /* Aides pour les tests automatiques (sans effet sur le jeu). */
+    PB.debug = {
+      app, view, input, ui, E,
+      /* Charge un plateau précis (tests). Même validation qu'une restauration, mais une erreur est levée au lieu d'être masquée. */
+      loadState(state) {
+        E.Game.fromState(state);
+        startGame(state);
+        return app.game;
+      },
+      slotCenter(i) {
+        const s = view.layout.slots[i];
+        return { x: s.cx, y: s.cy };
+      },
+      /* Point d'écran à viser pour poser la pièce i avec son coin haut-gauche sur la case (r, c).
+       * kind : 'touch' (doigt, par défaut) ou 'mouse'. */
+      aimFor(i, r, c, kind) {
+        const L = view.layout;
+        const s = app.game.shapeAt(i);
+        return { x: L.board.x + c * L.cell + (s.w * L.cell) / 2, y: L.board.y + r * L.cell + s.h * L.cell + input.lift(kind || 'touch', s) };
+      }
+    };
+
+    applySettings();
+    PB.i18n.setLang(app.settings.lang);
+    relocalize();
+    relayout();
+    const boot = storage.loadGame();
+    const bootAdv = storage.loadGame('adventure');
+    if (boot.status === 'lost') storage.clearGame();
+    if (bootAdv.status === 'lost') storage.clearGame('adventure');
+    if (boot.status === 'lost' || bootAdv.status === 'lost') ui.toast(T('toast.lostIgnored'));
+    else if (boot.status === 'recovered' || bootAdv.status === 'recovered') ui.toast(T('toast.recovered'));
+    showHome();
+    PB.ready = true;
+    return app;
+  }
+
+  PB.createApp = createApp;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== main.js ===== */
+/* Tessera Block — démarrage. Une erreur au lancement est affichée à l'écran au lieu d'un écran vide. */
+(function (root) {
+  'use strict';
+  const PB = root.PB;
+  try {
+    PB.app = PB.createApp(root);
+  } catch (err) {
+    if (root.console) root.console.error(err);
+    const box = root.document.createElement('pre');
+    box.style.cssText = 'position:fixed;inset:0;z-index:999;margin:0;padding:24px;color:#fff;background:#1a1446;white-space:pre-wrap;font:14px monospace';
+    box.textContent = ((PB.i18n && PB.i18n.t('startError')) || 'Tessera Block n\'a pas pu démarrer.') + '\n\n' + (err && err.stack ? err.stack : err);
+    root.document.body.appendChild(box);
+  }
+})(window);
+
+</script>
+<script>
+/* Publicité Adsterra (Native Banner), un seul code réutilisé sur 5 écrans :
+ *  accueil, pause, « Niveau réussi » (Aventure), « Partie terminée » (fin normale, plus de coups, échec) et fenêtre « Bonus pub » (+40 points).
+ * Le conteneur Adsterra est déplacé dans l'écran affiché.
+ * PRÉCHARGEMENT : dès qu'une pub a été vue et que son écran se ferme, la suivante est chargée en coulisses ;
+ * au prochain écran, elle s'affiche donc immédiatement (au lieu d'attendre le réseau).
+ * Garde-fous : jamais de chargement quand la page est masquée ; pas plus d'une requête toutes les 20 s hors bonus ;
+ * une pub préchargée n'est jamais jetée sans avoir été affichée. */
+(function () {
+  var CID = 'container-ab2e4639c893cf6fa7dfabe9bef31c2a';
+  var SRC = 'https://bicea.org/21/ab2e4639c893cf6fa7dfabe9bef31c2a';
+  var MAX_AGE = 300000, PREFETCH_GAP = 20000, NOFILL_MS = 20000;
+  var MAP = { screenHome: 'home', screenPause: 'pause', screenOver: 'over', screenLevel: 'level', modalReward: 'reward' };
+  var KEEP_SPACE = { screenHome: true, modalReward: true };   // l'espace reste réservé même sans pub : pas de saut de mise en page
+  var screens = {}, was = {};
+  var st = { seq: 0, loadedAt: 0, loading: false, consumed: false, blocked: false, host: null, active: null, pending: null, timer: 0, ptimer: 0 };
+
+  Object.keys(MAP).forEach(function (id) {
+    var el = document.getElementById(id);
+    var slot = document.querySelector('[data-ad-slot="' + MAP[id] + '"]');
+    if (el && slot) screens[id] = { el: el, slot: slot };
+  });
+  function reveal() {                        // la pub arrive après coup : on rouvre l'espace de l'écran affiché
+    var cur = screens[st.active];
+    if (cur && hasAd()) cur.slot.classList.remove('ad-empty');
+  }
+  new MutationObserver(reveal).observe(document.body, { childList: true, subtree: true });
+
+  function getBox() {
+    var b = document.getElementById(CID);
+    if (!b) { b = document.createElement('div'); b.id = CID; }
+    return b;
+  }
+  function hasAd() { var b = document.getElementById(CID); return !!b && (b.children.length > 0 || b.textContent.trim().length > 0); }
+  function wanted(id) {
+    var s = screens[id];
+    if (!s || !s.el.classList.contains('show')) return false;
+    if (id === 'screenLevel') { var d = document.getElementById('levelDone'); return !!d && !d.hidden; } // seulement après un niveau réussi
+    return true;
+  }
+  function collapse() {                       // aucune pub reçue : on libère l'espace (sauf accueil et bonus)
+    var s = screens[st.active];
+    if (s && !KEEP_SPACE[st.active]) s.slot.classList.add('ad-empty');
+  }
+  function armCheck(seq, previous) {
+    clearTimeout(st.timer);
+    st.timer = setTimeout(function () {
+      if (seq !== st.seq) return;
+      st.loading = false;
+      if (hasAd()) return;
+      if (previous) { getBox().innerHTML = previous; st.consumed = true; return; }   // rien de nouveau : on remet l'ancienne pub
+      if (st.consumed) collapse();
+    }, NOFILL_MS);
+  }
+  function startLoad(hostId, visible) {       // visible = true : un écran attend cette pub ; false : préchargement en coulisses
+    var s = screens[hostId];
+    if (!s) return;
+    var box = getBox();
+    if (box.parentNode !== s.slot) s.slot.appendChild(box);
+    st.host = hostId;
+    var previous = hasAd() ? box.innerHTML : '';
+    box.innerHTML = '';
+    var old = document.getElementById('adsterraScript');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var seq = ++st.seq;
+    st.loading = true;
+    st.loadedAt = Date.now();
+    st.consumed = !!visible;
+    try {
+      var sc = document.createElement('script');
+      sc.id = 'adsterraScript';
+      sc.async = true;
+      sc.setAttribute('data-cfasync', 'false');
+      sc.src = SRC;
+      sc.onerror = function () {              // script bloqué (bloqueur de pub, réseau) : on libère l'espace tout de suite
+        if (seq !== st.seq) return;
+        st.blocked = true;
+        st.loading = false;
+        if (st.active && screens[st.active]) screens[st.active].slot.classList.add('ad-empty');
+      };
+      box.parentNode.insertBefore(sc, box);
+    } catch (e) { if (window.console) console.error(e); }
+    armCheck(seq, previous);
+  }
+  function activate(id, keep) {
+    var s = screens[id], reward = id === 'modalReward';
+    st.active = id;
+    st.host = id;
+    s.slot.classList.remove('ad-empty');
+    var box = getBox();
+    if (box.parentNode !== s.slot) s.slot.appendChild(box);
+    if (reward) {                                                           // bonus : pub toujours toute neuve, blocage précédent ignoré
+      st.blocked = false;
+      if (document.hidden) { st.pending = id; return; }
+      startLoad(id, true);
+      return;
+    }
+    if (st.blocked) { s.slot.classList.add('ad-empty'); return; }          // script déjà bloqué dans cette session : pas d'espace vide
+    var age = Date.now() - st.loadedAt;
+    if (hasAd()) {
+      if (keep) { st.consumed = true; return; }                             // retour du bonus : on garde la pub affichée
+      if (age < MAX_AGE) { st.consumed = true; return; }   // pub déjà chargée : affichage immédiat, sans attendre le réseau
+    } else if (st.loading) {                                                // un chargement est déjà en cours : on l'attend
+      st.consumed = true;
+      armCheck(st.seq, '');
+      return;
+    }
+    if (document.hidden) { st.pending = id; return; }                       // page masquée : on attend le retour du joueur
+    startLoad(id, true);
+  }
+  function schedulePrefetch() {
+    clearTimeout(st.ptimer);
+    st.ptimer = setTimeout(prefetch, Math.max(1500, PREFETCH_GAP - (Date.now() - st.loadedAt)));
+  }
+  function prefetch() {
+    if (st.active || st.blocked || !st.consumed || !st.host) return;        // un écran affiche la pub, ou une pub non vue attend déjà
+    if (document.hidden) { st.pending = '__prefetch'; return; }
+    startLoad(st.host, false);
+  }
+  function restoreUnder() {                  // fenêtre « Bonus » fermée : la pub retourne dans l'écran affiché dessous
+    var order = ['screenLevel', 'screenOver', 'screenPause', 'screenHome'];
+    for (var i = 0; i < order.length; i++) {
+      if (screens[order[i]] && screens[order[i]].el.classList.contains('show') && wanted(order[i])) { activate(order[i], true); return; }
+    }
+    st.active = null;
+    schedulePrefetch();
+  }
+  function isOn(str) { return /(^|\s)show(\s|$)/.test(str || ''); }
+  function sync() {                          // état initial (l'accueil est déjà affiché au démarrage)
+    Object.keys(screens).forEach(function (id) {
+      var on = screens[id].el.classList.contains('show');
+      if (on && !was[id]) { was[id] = true; if (wanted(id)) activate(id); }
+      else if (!on) was[id] = false;
+    });
+  }
+  function onMutations(recs) {               // chaque passage « masqué → affiché » compte, même si masquer et afficher ont lieu dans le même instant
+    var byId = {};
+    recs.forEach(function (r) { (byId[r.target.id] = byId[r.target.id] || []).push(r); });
+    Object.keys(byId).forEach(function (id) {
+      var list = byId[id], appeared = false;
+      list.forEach(function (r, i) {
+        var after = i + 1 < list.length ? list[i + 1].oldValue : screens[id].el.className;
+        if (!isOn(r.oldValue) && isOn(after)) appeared = true;
+      });
+      var before = was[id];
+      was[id] = screens[id].el.classList.contains('show');
+      if (appeared && wanted(id)) activate(id);
+      else if (id === 'modalReward' && before && !was[id]) restoreUnder();
+      else if (before && !was[id] && st.active === id) { st.active = null; schedulePrefetch(); }   // écran fermé : on prépare la pub suivante
+    });
+  }
+
+  var mo = new MutationObserver(onMutations);
+  Object.keys(screens).forEach(function (id) { mo.observe(screens[id].el, { attributes: true, attributeFilter: ['class'], attributeOldValue: true }); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !st.pending) return;
+    var p = st.pending;
+    st.pending = null;
+    if (p === '__prefetch') prefetch();
+    else if (st.active === p && wanted(p)) startLoad(p, true);
+  });
+  sync();
+})();
+</script>
+<script>
+/* Bonus « pub regardée en entier » : +40 points ajoutés au score (écrans « Partie terminée » et « Niveau réussi »).
+ * La récompense n'est donnée que si : la pub s'est réellement affichée, la page est restée visible pendant tout le compte à rebours,
+ * et le joueur n'a pas fermé la fenêtre. Aucun texte n'invite à cliquer sur la pub. */
+(function () {
+  var CID = 'container-ab2e4639c893cf6fa7dfabe9bef31c2a';
+  var WATCH_MS = 10000, LOAD_MAX_MS = 20000;
+  var $ = function (id) { return document.getElementById(id); };
+  var modal = $('modalReward'), bar = $('rewardBar'), status = $('rewardStatus'), btnClose = $('btnRewardClose');
+  if (!modal || !bar || !status || !btnClose) return;
+  var slot = modal.querySelector('.ad-slot');
+  var T = function (k, p) { return window.PB && PB.i18n ? PB.i18n.t(k, p) : k; };
+  var buttons = [{ el: $('btnBonusOver'), screen: $('screenOver') }, { el: $('btnBonusLevel'), screen: $('screenLevel') }];
+  var state = 'idle', timer = 0, openedAt = 0, startedAt = 0;
+
+  function adReady() { var b = $(CID); return !!b && (b.children.length > 0 || b.textContent.trim().length > 0); }
+  function stop() { clearInterval(timer); timer = 0; }
+  function refresh() {                       // le bouton n'apparaît que si un bonus est réellement possible
+    var ok = !!(window.PB && PB.bonus && PB.bonus.available());
+    buttons.forEach(function (b) { if (b.el && b.screen) b.el.hidden = !(ok && b.screen.classList.contains('show')); });
+  }
+  function close() { stop(); state = 'idle'; modal.classList.remove('show'); refresh(); }
+  function fail() { stop(); state = 'failed'; bar.style.width = '0%'; status.textContent = T('bonus.fail'); }
+  function finish() {
+    stop();
+    var score = PB.bonus.grant();
+    if (score === null) { fail(); return; }
+    state = 'done';
+    bar.style.width = '100%';
+    status.textContent = T('bonus.done', { n: PB.bonus.POINTS });
+    btnClose.textContent = T('bonus.ok');
+    refresh();
+  }
+  function tick() {
+    if (document.hidden) { close(); return; }                       // le joueur a quitté la page : pas de récompense
+    var now = Date.now();
+    if (state === 'loading') {
+      if (adReady()) { state = 'watching'; startedAt = now; }
+      else if (now - openedAt > LOAD_MAX_MS || slot.classList.contains('ad-empty')) fail();
+    } else if (state === 'watching') {
+      if (!adReady()) { fail(); return; }
+      var left = Math.max(0, WATCH_MS - (now - startedAt));
+      bar.style.width = Math.min(100, ((WATCH_MS - left) / WATCH_MS) * 100) + '%';
+      status.textContent = T('bonus.wait', { n: Math.ceil(left / 1000) });
+      if (left <= 0) finish();
+    }
+  }
+  function open() {
+    if (state !== 'idle' || !window.PB || !PB.bonus || !PB.bonus.available()) return;
+    state = 'loading';
+    openedAt = Date.now();
+    startedAt = 0;
+    bar.style.width = '0%';
+    btnClose.textContent = T('bonus.close');
+    status.textContent = T('bonus.loading');
+    modal.classList.add('show');             // le chargeur de pubs déplace alors la pub ici et la recharge
+    stop();
+    timer = setInterval(tick, 250);
+  }
+
+  buttons.forEach(function (b) {
+    if (b.el) b.el.addEventListener('click', function () { if (window.PB && PB.audio) PB.audio.play('click'); open(); });
+  });
+  btnClose.addEventListener('click', function () { if (window.PB && PB.audio) PB.audio.play('click'); close(); });
+  document.addEventListener('keydown', function (e) {                // Échap ferme seulement la fenêtre Bonus
+    if (e.key === 'Escape' && modal.classList.contains('show')) { e.stopPropagation(); close(); }
+  }, true);
+  var mo = new MutationObserver(refresh);
+  buttons.forEach(function (b) { if (b.screen) mo.observe(b.screen, { attributes: true, attributeFilter: ['class'] }); });
+  refresh();
+})();
+</script>
+<script>
+/* Diagnostic des pubs : invisible en temps normal. Ajoute « ?adtest » à la fin de l'adresse pour afficher un petit panneau en bas de l'écran. */
+(function () {
+  if (!/[?&]adtest\b/.test(location.search)) return;
+  var CID = 'container-ab2e4639c893cf6fa7dfabe9bef31c2a';
+  var fails = [];
+  var short = function (u) { return String(u || '').replace(/^https?:\/\//, '').slice(0, 60); };
+  window.addEventListener('error', function (e) { var t = e.target; if (t && t.tagName === 'IMG') fails.push(short(t.src)); }, true);
+  var pane = document.createElement('pre');
+  pane.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;margin:0;padding:6px 8px;max-height:45vh;overflow:auto;background:rgba(0,0,0,.88);color:#9f9;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none';
+  document.body.appendChild(pane);
+  function tick() {
+    var b = document.getElementById(CID), L = [];
+    L.push('page : ' + location.protocol + '//' + (location.host || '(fichier local)') + ' | visible : ' + !document.hidden);
+    L.push('script pub : ' + (document.getElementById('adsterraScript') ? 'présent' : 'absent'));
+    if (!b) L.push('conteneur : absent');
+    else {
+      var r = b.getBoundingClientRect(), p = b.parentNode;
+      var imgs = b.getElementsByTagName('img'), ifr = b.getElementsByTagName('iframe');
+      L.push('conteneur dans : ' + (p && p.dataset && p.dataset.adSlot) + ' | taille : ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' | éléments : ' + b.getElementsByTagName('*').length);
+      L.push('images : ' + imgs.length + ' | iframes : ' + ifr.length + ' | images en échec : ' + fails.length);
+      Array.prototype.slice.call(imgs, 0, 6).forEach(function (im, i) {
+        var q = im.getBoundingClientRect();
+        L.push(' img' + (i + 1) + ' : chargée=' + im.complete + ' natif=' + im.naturalWidth + 'x' + im.naturalHeight + ' affichée=' + Math.round(q.width) + 'x' + Math.round(q.height) + ' ' + short(im.currentSrc || im.src));
+      });
+      Array.prototype.slice.call(ifr, 0, 3).forEach(function (f, i) { L.push(' iframe' + (i + 1) + ' : ' + short(f.src)); });
+      fails.slice(0, 3).forEach(function (f) { L.push(' échec : ' + f); });
+    }
+    pane.textContent = L.join('\n');
+  }
+  setInterval(tick, 1000);
+  tick();
+})();
+</script>
+</body>
+</html>
