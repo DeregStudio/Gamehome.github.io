@@ -1,169 +1,321 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Gamehome : jouez gratuitement à des jeux en ligne sans téléchargement.">
-  <title>Gamehome - Jeux gratuits en ligne</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
+<meta name="description" content="Gamehome : jouez à nos jeux gratuitement sans les télécharger.">
 
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #101522;
-      color: white;
-    }
+<title>Gamehome - Jeux gratuits en ligne</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #101522;
+    color: #ffffff;
+}
+
+/* HEADER */
+
+header {
+    background: #192235;
+    padding: 18px 6%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    color: #65d6a6;
+    font-size: 27px;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.header-text {
+    color: #cbd5e1;
+    font-size: 13px;
+}
+
+/* PRESENTATION */
+
+.hero {
+    text-align: center;
+    padding: 65px 20px 40px;
+}
+
+.hero h2 {
+    font-size: 34px;
+    margin-bottom: 16px;
+}
+
+.hero p {
+    font-size: 16px;
+    color: #b8c2d3;
+    line-height: 1.6;
+}
+
+/* PUBLICITES */
+
+.ad-container {
+    width: 100%;
+    padding: 0 6%;
+    margin: 20px auto 40px;
+}
+
+.ad {
+    max-width: 900px;
+    min-height: 100px;
+    margin: auto;
+    background: #202b40;
+    border: 1px dashed #637087;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #9ca9bd;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+/* SECTION JEUX */
+
+.games {
+    padding: 15px 6% 45px;
+}
+
+.section-title {
+    font-size: 23px;
+    margin-bottom: 25px;
+}
+
+.game-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(240px, 1fr)
+    );
+    gap: 25px;
+}
+
+/* CARTES */
+
+.game-card {
+    background: #202b40;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #2c3950;
+    transition: transform 0.25s, border-color 0.25s;
+}
+
+.game-card:hover {
+    transform: translateY(-5px);
+    border-color: #65d6a6;
+}
+
+.game-image {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #180b3c;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.game-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.game-info {
+    padding: 20px;
+}
+
+.game-info h3 {
+    font-size: 19px;
+    margin-bottom: 10px;
+}
+
+.game-info p {
+    color: #b8c2d3;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 18px;
+}
+
+/* BOUTON JOUER */
+
+.play-button {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 13px;
+    background: #36bd8c;
+    color: #101522;
+    text-decoration: none;
+    font-weight: bold;
+    border-radius: 7px;
+    transition: background 0.2s;
+}
+
+.play-button:hover {
+    background: #65d6a6;
+}
+
+/* PROCHAIN JEU */
+
+.coming-soon {
+    min-height: 100%;
+}
+
+.coming-image {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: linear-gradient(
+        135deg,
+        #202b40,
+        #30205a
+    );
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #65d6a6;
+    font-size: 45px;
+}
+
+/* PIED DE PAGE */
+
+footer {
+    background: #192235;
+    padding: 35px 15px;
+    text-align: center;
+    color: #b8c2d3;
+    font-size: 13px;
+    line-height: 2;
+}
+
+footer a {
+    color: #65d6a6;
+    text-decoration: none;
+}
+
+/* TELEPHONES */
+
+@media (max-width: 600px) {
 
     header {
-      padding: 22px 6%;
-      background: #192235;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+        padding: 17px 5%;
     }
 
-    header h1 {
-      color: #65d6a6;
-      margin: 0;
+    .logo {
+        font-size: 23px;
+    }
+
+    .header-text {
+        font-size: 11px;
     }
 
     .hero {
-      text-align: center;
-      padding: 55px 15px 35px;
+        padding: 45px 15px 30px;
     }
 
     .hero h2 {
-      font-size: 32px;
+        font-size: 27px;
     }
 
     .hero p {
-      color: #b8c2d3;
-    }
-
-    .ad {
-      max-width: 900px;
-      min-height: 90px;
-      margin: 20px auto;
-      background: #202b40;
-      border: 1px dashed #637087;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #aab5c7;
-      font-size: 13px;
+        font-size: 14px;
     }
 
     .games {
-      padding: 30px 6%;
-    }
-
-    .games h2 {
-      margin-bottom: 25px;
+        padding-left: 5%;
+        padding-right: 5%;
     }
 
     .game-grid {
-      display: grid;
-      grid-template-columns: repeat(
-        auto-fit, minmax(220px, 1fr)
-      );
-      gap: 22px;
+        grid-template-columns: 1fr;
     }
-
-    .game-card {
-      background: #202b40;
-      border-radius: 14px;
-      overflow: hidden;
-    }
-
-    .game-card img {
-      width: 100%;
-      height: 160px;
-      object-fit: cover;
-    }
-
-    .game-info {
-      padding: 16px;
-    }
-
-    .game-info p {
-      color: #b8c2d3;
-    }
-
-    .play {
-      display: block;
-      text-align: center;
-      padding: 12px;
-      background: #36bd8c;
-      color: #101522;
-      text-decoration: none;
-      font-weight: bold;
-      border-radius: 7px;
-    }
-
-    footer {
-      text-align: center;
-      padding: 30px;
-      background: #192235;
-      color: #b8c2d3;
-      margin-top: 40px;
-    }
-  </style>
+}
+</style>
 </head>
 
 <body>
 
+<!-- EN-TETE -->
+
 <header>
-  <h1>Gamehome</h1>
-  <span>Jeux gratuits en ligne</span>
+    <a href="index.html" class="logo">Gamehome</a>
+
+    <span class="header-text">
+        Jeux gratuits en ligne
+    </span>
 </header>
 
+
+<!-- PRESENTATION -->
+
 <section class="hero">
-  <h2>Bienvenue sur Gamehome !</h2>
-  <p>Découvrez nos jeux et amusez-vous gratuitement.</p>
+
+    <h2>Bienvenue sur Gamehome !</h2>
+
+    <p>
+        Jouez à nos jeux gratuitement sans les télécharger.
+    </p>
+
 </section>
 
-<!-- ESPACE PUBLICITAIRE -->
-<div class="ad">
-  ESPACE PUBLICITAIRE
+
+<!-- PUBLICITE SUPERIEURE -->
+
+<div class="ad-container">
+    <div class="ad">
+        ESPACE PUBLICITAIRE
+    </div>
 </div>
+
+
+<!-- LISTE DES JEUX -->
 
 <section class="games">
-  <h2>Nos jeux disponibles</h2>
 
-  <div class="game-grid">
+    <h2 class="section-title">
+        Nos jeux disponibles
+    </h2>
 
-    <article class="game-card">
-      <img src="images/tessera-block.jpg"
-           alt="Tessera-Block">
+    <div class="game-grid">
 
-      <div class="game-info">
-        <h3>Tessera-Block</h3>
-        <p>Un jeu de réflexion et de stratégie.</p>
+        <!-- TESSERA BLOCK -->
 
-        <a class="play"
-           href="tessera-block.html">
-           Jouer maintenant
-        </a>
-      </div>
-    </article>
+        <article class="game-card">
 
-  </div>
-</section>
+            <div class="game-image">
 
-<!-- ESPACE PUBLICITAIRE -->
-<div class="ad">
-  ESPACE PUBLICITAIRE
-</div>
+                <img
+                    src="images/tessera-block.png"
+                    alt="Tessera-Block - Jeu de réflexion"
+                >
 
-<footer>
-  <p>© 2026 Gamehome - Tous droits réservés.</p>
-  <p>Jouez gratuitement, partout et à tout moment.</p>
-</footer>
+            </div>
 
-</body>
-</html>
+            <div class="game-info">
+
+                <h3>Tessera-Block</h3>
+
+                <p>
+                    Un jeu de réflexion et de stratégie.
+                    Testez votre logique et relevez le défi !
+                </p>
+
+                <a
+                    href="tessera-block.html"
+                    class="play-button"
+  
