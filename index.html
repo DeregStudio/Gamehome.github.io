@@ -1,0 +1,169 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Gamehome : jouez gratuitement à des jeux en ligne sans téléchargement.">
+  <title>Gamehome - Jeux gratuits en ligne</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #101522;
+      color: white;
+    }
+
+    header {
+      padding: 22px 6%;
+      background: #192235;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      color: #65d6a6;
+      margin: 0;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 55px 15px 35px;
+    }
+
+    .hero h2 {
+      font-size: 32px;
+    }
+
+    .hero p {
+      color: #b8c2d3;
+    }
+
+    .ad {
+      max-width: 900px;
+      min-height: 90px;
+      margin: 20px auto;
+      background: #202b40;
+      border: 1px dashed #637087;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #aab5c7;
+      font-size: 13px;
+    }
+
+    .games {
+      padding: 30px 6%;
+    }
+
+    .games h2 {
+      margin-bottom: 25px;
+    }
+
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fit, minmax(220px, 1fr)
+      );
+      gap: 22px;
+    }
+
+    .game-card {
+      background: #202b40;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .game-card img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+    }
+
+    .game-info {
+      padding: 16px;
+    }
+
+    .game-info p {
+      color: #b8c2d3;
+    }
+
+    .play {
+      display: block;
+      text-align: center;
+      padding: 12px;
+      background: #36bd8c;
+      color: #101522;
+      text-decoration: none;
+      font-weight: bold;
+      border-radius: 7px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 30px;
+      background: #192235;
+      color: #b8c2d3;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Gamehome</h1>
+  <span>Jeux gratuits en ligne</span>
+</header>
+
+<section class="hero">
+  <h2>Bienvenue sur Gamehome !</h2>
+  <p>Découvrez nos jeux et amusez-vous gratuitement.</p>
+</section>
+
+<!-- ESPACE PUBLICITAIRE -->
+<div class="ad">
+  ESPACE PUBLICITAIRE
+</div>
+
+<section class="games">
+  <h2>Nos jeux disponibles</h2>
+
+  <div class="game-grid">
+
+    <article class="game-card">
+      <img src="images/tessera-block.jpg"
+           alt="Tessera-Block">
+
+      <div class="game-info">
+        <h3>Tessera-Block</h3>
+        <p>Un jeu de réflexion et de stratégie.</p>
+
+        <a class="play"
+           href="tessera-block.html">
+           Jouer maintenant
+        </a>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ESPACE PUBLICITAIRE -->
+<div class="ad">
+  ESPACE PUBLICITAIRE
+</div>
+
+<footer>
+  <p>© 2026 Gamehome - Tous droits réservés.</p>
+  <p>Jouez gratuitement, partout et à tout moment.</p>
+</footer>
+
+</body>
+</html>
